@@ -3,7 +3,23 @@ import osmium
 import random
 import copy
 from Map import *
+from lib.NZRenderer import render
+from lib.NZMap import readFile
 random.seed(1)
+
+# params: a filename and the bounds of a osm file
+# rewrites the osm XML file containing the bounds tag
+# returns: None
+def insert_bounds(filename, min_lat, min_lon, max_lat, max_lon):
+    lines = []
+    with open(filename, 'r') as f:
+        for line in f.readlines():
+            lines.append(line)
+    bounds = "  <bounds minlat=\"{}\" minlon=\"{}\" maxlat=\"{}\" maxlon=\"{}\"/>  \n"
+    lines.insert(2, bounds.format(min_lat, min_lon, max_lat, max_lon))
+    with open(filename, 'w') as f:
+        for line in lines:
+            f.write(line)
 
 # params: the path to an osm file in the system
 # returns: a list of node objects and a list of ways objects from the file
@@ -125,10 +141,12 @@ def generate(ways, nodes, iterations=10):
 # returns: shifted second way and its nodes
 def adjust(way1, nodes1, way2, nodes2):
     print("Merging w{} and w{}".format(way1.id, way2.id))
-    pivot = nodes1[0]
+    pivot_index = random.randint(0, len(nodes1)-1)
+    pivot = nodes1[pivot_index]
     print("pivot node way1", pivot.location[1],
                              pivot.location[0])
-    adjust_node = nodes2[0]
+    adjust_node_index = random.randint(0, len(nodes2)-1)
+    adjust_node = nodes2[adjust_node_index]
     print("adjust node way2", adjust_node.location[1],
                               adjust_node.location[0])
     lat_adjust = pivot.location[1] - adjust_node.location[1]
@@ -136,30 +154,28 @@ def adjust(way1, nodes1, way2, nodes2):
 
     way2.nodes = []
 
-    nodes2.pop(0)
+    nodes2.pop(adjust_node_index)
     for n in nodes2:
         n.location = (n.location[0]+lon_adjust, n.location[1]+lat_adjust)
         way2.nodes.append(n.id)
 
-    way2.nodes.insert(0, pivot.id)
-    nodes2.insert(0, pivot)
+    way2.nodes.insert(adjust_node_index, pivot.id)
+    nodes2.insert(adjust_node_index, pivot)
 
     return way2, nodes2
 
-input_file = "neighbourhood.osm"
+input_file = "portland.osm"
 output_file = "output.osm"
 
 nodes, ways = extract_data(input_file)
 highway_ways = get_ways_by_tag(ways, "highway")
 highway_ways, highway_nodes = get_highways(ways, nodes)
 
-gen_ways, gen_nodes, used_ways_list = generate(copy.deepcopy(highway_ways), copy.deepcopy(highway_nodes))
-
+gen_ways, gen_nodes, used_ways_list = generate(copy.deepcopy(highway_ways), copy.deepcopy(highway_nodes), 40)
 min_lat, min_lon, max_lat, max_lon = get_bounds(list(gen_nodes.values()))
-print("<bounds minlat=\"{}\" minlon=\"{}\" ".format(min_lat, min_lon) +
-        "maxlat=\"{}\" maxlon=\"{}\"/>".format(max_lat, max_lon))
 
 write(output_file, list(gen_nodes.values()), list(gen_ways.values()))
+insert_bounds(output_file, min_lat, min_lon, max_lat, max_lon)
 
 used_ways = {}
 for w_id in used_ways_list:
@@ -171,7 +187,9 @@ for way in used_ways.values():
         used_nodes[n_id] = nodes[n_id]
 
 min_lat, min_lon, max_lat, max_lon = get_bounds(list(used_nodes.values()))
-print("<bounds minlat=\"{}\" minlon=\"{}\" ".format(min_lat, min_lon) +
-        "maxlat=\"{}\" maxlon=\"{}\"/>".format(max_lat, max_lon))
 
 write("unmerged.osm", list(used_nodes.values()), list(used_ways.values()))
+insert_bounds("unmerged.osm", min_lat, min_lon, max_lat, max_lon)
+
+map = readFile(output_file)
+render(map)
