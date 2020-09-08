@@ -56,7 +56,9 @@ class OSMNode():
         return str(self.__dict__)
 
 class OSMWay():
-    def __init__(self, obj):
+    def __init__(self, obj=None):
+        self.nodes = []
+        if obj == None: return
         copyable_attributes = ('id', 'version','visible', 'changeset',
                                'timestamp', 'uid')
         for attr in copyable_attributes:
@@ -69,7 +71,7 @@ class OSMWay():
                 copy[key] = value
             setattr(self, attr, copy)
 
-        self.nodes = []
+
         for n in obj.nodes:
             #self.nodes.append(NodeRef(n))
             self.nodes.append(n.ref)
@@ -88,3 +90,51 @@ class NodeRef():
         self.y = obj.y
     def __repr__(self):
         return str(self.ref)
+
+class Cell():
+    def __init__(self, ways={}, nodes={}):
+        self.ways = ways
+        self.nodes = nodes
+        self.r = None
+        self.l = None
+        self.u = None
+        self.d = None
+        if len(nodes) > 0:
+            self.set_connectors()
+        # print("Connectors defined: ")
+        # print("u: {}".format(self.u.location))
+        # print("d: {}".format(self.d.location))
+        # print("r: {}".format(self.r.location))
+        # print("l: {}".format(self.l.location))
+
+    def set_ways_nodes(self, ways, nodes):
+        self.ways = ways
+        self.nodes = nodes
+        self.set_connectors()
+        print("u: {}".format(self.u.location))
+        print("d: {}".format(self.d.location))
+        print("r: {}".format(self.r.location))
+        print("l: {}".format(self.l.location))
+
+    def set_connectors(self):
+        #lon, lat = self.nodes[0].location[0], self.nodes[0].location[1]
+        n = self.nodes[list(self.nodes.keys())[0]]
+        min_lat, min_lon, max_lat, max_lon = n, n, n, n
+
+        # try to get only nodes belonging to roads
+        nodes = []
+        for w in self.ways.values():
+            if "highway" in w.tags.keys():
+                nodes.extend([self.nodes[x] for x in w.nodes])
+        # default to any node if no roads are identified
+        if len(nodes) == 0: nodes = self.nodes
+
+        for n in nodes:
+            if n.location[0] < min_lon.location[0]: min_lon = n
+            if n.location[0] > max_lon.location[0]: max_lon = n
+            if n.location[1] < min_lat.location[1]: min_lat = n
+            if n.location[1] > max_lat.location[1]: max_lat = n
+        self.r = max_lon
+        self.l = min_lon
+        self.u = max_lat
+        self.d = min_lat
