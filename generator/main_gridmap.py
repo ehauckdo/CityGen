@@ -8,7 +8,6 @@ from lib.NZRenderer import render
 from lib.NZMap import readFile
 from Map import Cell, OSMWay
 from preprocess import get_bounds
-#random.seed(0)
 
 def save_data(filename, ways, nodes):
     handler.write_data(filename, nodes, ways)
