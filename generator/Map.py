@@ -37,7 +37,8 @@ class Map(osmium.SimpleHandler):
         return highway_ways, highway_nodes
 
 class OSMNode():
-    def __init__(self, obj):
+    def __init__(self, obj=None):
+        if obj == None: return
         copyable_attributes = ['id', 'version','visible', 'changeset',
                                'timestamp', 'uid']#, 'location']
         for attr in copyable_attributes:
