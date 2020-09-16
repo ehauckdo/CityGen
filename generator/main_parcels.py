@@ -15,6 +15,11 @@ import networkx as nx
 index = 0
 colors = ["b","g","r","c","m","y"]
 
+def save_data(filename, ways, nodes):
+    handler.write_data(filename, nodes, ways)
+    min_lat, min_lon, max_lat, max_lon = get_bounds(nodes)
+    handler.insert_bounds(filename, min_lat, min_lon, max_lat, max_lon)
+
 def next_color():
     global index
     global colors
@@ -23,22 +28,20 @@ def next_color():
         index = 0
     return colors[index]
 
-def plot(nodes, adjacency):
+def plot(nodes, ways):
     import networkx as nx
     import matplotlib.pyplot as plt
     G = nx.Graph()
     pos = {}
-    labels = {}
 
     for n_id, n in nodes.items():
         G.add_node(n_id)
         pos[n_id] = n.location
-        labels[n_id] = "{}".format(n_id)
 
-    for n1_id, list in adjacency.items():
-        for n2_id, attr in list:
-            color = attr["color"]
-            G.add_edge(n1_id, n2_id, width=1, edge_color=color)
+    for w_id, way in ways.items():
+        for i in range(len(way.nodes)-1):
+            n1, n2 = way.nodes[i], way.nodes[i+1]
+            G.add_edge(n1, n2, width=1, edge_color=way.color)
 
     options = {
     #"node_color": "black",
@@ -54,30 +57,6 @@ def plot(nodes, adjacency):
     nx.draw(G, pos, node_color=node_color, edge_color=edge_color, width=edge_width, **options)
     plt.show()
 
-def create_graph(nodes, ways):
-    graph = {}
-    adjacency = {}
-
-    for id, node in nodes.items():
-        graph[id] = Node(node)
-        adjacency[id] = []
-
-    for id, way in ways.items():
-        #print(way.nodes)
-        for i in range(len(way.nodes)-1):
-            n1, n2 = nodes[way.nodes[i]], nodes[way.nodes[i+1]]
-            #print("{} - {}".format(way.nodes[i], way.nodes[i+1]))
-            graph[n1.id].apply_tag(way.tags)
-            graph[n2.id].apply_tag(way.tags)
-            color = "black"
-            if ("building" in graph[n1.id].tags.keys() and
-                "building" in graph[n2.id].tags.keys()):
-                    color = "red"
-            adjacency[n1.id].append((n2.id, {"color":color}))
-            adjacency[n2.id].append((n1.id, {"color":color}))
-
-    return graph, adjacency
-
 def get_cycles(input_file):
     G = ox.graph.graph_from_xml(input_file, simplify=False, retain_all=True)
 
@@ -89,7 +68,7 @@ def get_cycles(input_file):
 
 id_counter = 993
 def generate_building(lot):
-    print("Generating building inside {}".format(lot))
+    print("Generating building inside of {} points".format(len(lot)))
     if len(lot) <= 0:
         return {}, {}
 
@@ -111,9 +90,15 @@ def generate_building(lot):
     min_lon, max_lon = lonspace[2], lonspace[3]
     print("Building Coordinates: {}\n".format([min_lat, min_lon, max_lat, max_lon]))
 
+    way = OSMWay()
+    global id_counter
+    way.id = id_counter
+    way.color = "red"
+    id_counter += 1
+
     def new_node(lon, lat):
         global id_counter
-        n = Node()
+        n = OSMNode()
         n.id = id_counter
         id_counter += 1
         n.location = (lon, lat)
@@ -126,19 +111,11 @@ def generate_building(lot):
     n4 = new_node(min_lon, max_lat)
     nodes = {n1.id: n1, n2.id: n2, n3.id: n3, n4.id: n4}
 
-    c = "red"
-    adjacencies = { n1.id: [(n2.id, {"color":c}), (n4.id, {"color":c})],
-                    n2.id: [(n1.id, {"color":c}), (n3.id, {"color":c})],
-                    n3.id: [(n2.id, {"color":c}), (n4.id, {"color":c})],
-                    n4.id: [(n3.id, {"color":c}), (n1.id, {"color":c})] }
-    return nodes, adjacencies
+    way.nodes = [n1.id, n2.id, n3.id, n4.id, n1.id]
+    way.tags = {"building":"residential"}
+    ways = {way.id:way}
 
-def to_osm(graph, adjacency):
-    nodes, ways = {}
-
-    for n_id, n in graph.items():
-        node = OSMNode(n)
-        node.tags = n.tags
+    return nodes, ways
 
 def parseArgs(args):
 	usage = "usage: %prog [options]"
@@ -156,22 +133,35 @@ def main():
 
     nodes, ways = handler.extract_data(input)
 
-    graph, adjacency = create_graph(nodes,ways)
     cycles = get_cycles(input)
+
+    # mark ways and nodes that represent building
+    for id, way in ways.items():
+        if "building" in way.tags.keys():
+            way.color = "red"
+            for n_id in way.nodes:
+                nodes[n_id].color = "red"
+        else:
+            way.color = "black"
+            for n_id in way.nodes:
+                nodes[n_id].color = "black"
 
     # remove cycles that represent buildings
     for i in range(len(cycles)-1, -1, -1):
         for n_id in cycles[i]:
-            if "building" in graph[n_id].tags.keys():
+            if nodes[n_id].color == "red":
                 cycles.pop(i)
                 break
 
     for cycle in cycles:
-        n, a = generate_building([graph[x] for x in cycle])
-        graph.update(n)
-        adjacency.update(a)
+        n, a = generate_building([nodes[x] for x in cycle])
+        nodes.update(n)
+        ways.update(a)
 
-    plot(graph, adjacency)
+    #plot(graph, adjacency)
+    plot(nodes, ways)
+
+    save_data("output_{}".format(input), ways.values(), nodes.values())
 
 if __name__ == '__main__':
     main()
