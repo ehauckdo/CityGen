@@ -32,14 +32,57 @@ def next_color():
         index = 0
     return colors[index]
 
-# I got this implementation from the internet and it appears to work
-# I can implement my own using the cross product vector based approach
-# where p * tr = q * us
+# ===== GEOMETRY FUNCTIONS ======
 def intersect(x1, y1, x2, y2, x3, y3, x4, y4):
+    # I got this implementation from the internet and it appears to work
+    # I can implement my own using the cross product vector based approach
+    # where p * tr = q * us
     def ccw(x1, y1, x2, y2, x3, y3):
         return (y3-y1) * (x2-x1) > (y2-y1) * (x3-x1)
     return (ccw(x1,y1, x3,y3, x4,y4) != ccw(x2,y2, x3,y3, x4,y4) and
            ccw(x1,y1, x2,y2, x3,y3) != ccw(x1,y1, x2,y2, x4,y4))
+
+def has_intersection(polygon1, polygon2):
+    # Check if there is any intersection between pairs of edges of polygons
+    for i in range(len(polygon1)-1):
+        x1, y1 = polygon1[i]
+        x2, y2 = polygon1[i+1]
+        for j in range(len(polygon2)-1):
+            x3, y3 = polygon2[j]
+            x4, y4 = polygon2[j+1]
+            if intersect(x1, y1, x2, y2, x3, y3, x4, y4):
+                return True
+    return False
+
+def point_inside_polygon(x, y, polygon):
+    count = 0
+    for i in range(len(polygon)-1):
+        x1, y1 = polygon[i]
+        x2, y2 = polygon[i+1]
+        if (y > y1 and y < y2) or (y > y2 and y < y1):
+            m = (y2-y1)/(x2-x1)
+            ray_x = x1 + (y - y1)/m
+            if ray_x > x:  count +=1
+    return count % 2 == 1
+
+def is_inside(polygon1, polygon2):
+    #print("Checking if poylgon1: \n {}".format(polygon1))
+    #print("is inside polygon2: \n {}".format(polygon2))
+
+    if has_intersection(polygon1, polygon2):
+        print("NO INTERSECTION")
+        return False
+    else:
+        print("HAS INTERSECTION")
+
+    # If no intersection is found, we just need to check that at least
+    # 1 point of pol1 is within pol2, we do this approximately here
+    for x, y in polygon1:
+        if point_inside_polygon(x, y, polygon2):
+            return True
+    print("NO POINT INSIDE")
+    return False
+# ===============================
 
 def set_node_type(ways, nodes):
     for n in nodes.values():
@@ -164,41 +207,6 @@ def generate_building(lot):
 
     return nodes, ways
 
-def is_inside(polygon1, polygon2):
-    #print("Checking if poylgon1: \n {}".format(polygon1))
-    #print("is inside polygon2: \n {}".format(polygon2))
-
-    # Check if there is any intersection between pairs of edges of polygons
-    for i in range(len(polygon1)-1):
-        x1, y1 = polygon1[i]
-        x2, y2 = polygon1[i+1]
-        for j in range(len(polygon2)-1):
-            x3, y3 = polygon2[j]
-            x4, y4 = polygon2[j+1]
-            if intersect(x1, y1, x2, y2, x3, y3, x4, y4):
-                print("HAS INTERSECTION")
-                return False
-    print("NO INTERSECTION")
-
-    def point_inside_polygon(x, y, polygon):
-        count = 0
-        for i in range(len(polygon)-1):
-            x1, y1 = polygon[i]
-            x2, y2 = polygon[i+1]
-            if (y > y1 and y < y2) or (y > y2 and y < y1):
-                m = (y2-y1)/(x2-x1)
-                ray_x = x1 + (y - y1)/m
-                if ray_x > x:  count +=1
-        return count % 2 == 1
-
-    # If no intersection is found, we just need to check that at least
-    # 1 point of pol1 is within pol2, we do this approximately here
-    for x, y in polygon1:
-        if point_inside_polygon(x, y, polygon2):
-            return True
-    return False
-
-
 def generate_building_parallel(lot, source_ways):
     print("Generating building inside of polygon with {} points".format(len(lot)))
     global created, total
@@ -293,15 +301,6 @@ def generate_building_parallel(lot, source_ways):
         x5, y5, x6, y6 = parallel_line.get_parallel_points(x1, y1, x2, y2, u, v, d)
         print("p5 lon: {}, lat: {}, p4 lon: {}, lat: {}, ".format(x5,y5,x6,y6))
 
-        # temp = np.linspace(x3, x4, 4)
-        # x3, x4 = temp[1], temp[2]
-        # # temp = np.linspace(y3, y4, 4)
-        # # y3, y4 = temp[1], temp[2]
-        # temp = np.linspace(x5, x6, 4)
-        # x5, x6 = temp[1], temp[2]
-        # # temp = np.linspace(y5, y6, 4)
-        # # y6, y5 = temp[1], temp[2]
-
         n1 = new_node(x3, y3)
         n2 = new_node(x4, y4)
         n3 = new_node(x6, y6)
@@ -318,9 +317,25 @@ def generate_building_parallel(lot, source_ways):
             ways.update({way.id:way})
             created +=1
 
-
         #break
 
+    ways_list = list(ways.items())
+    #for i in range(len(ways_list)-1):
+    for i in range(len(ways_list)-1, 0, -1):
+        id_1, way_1 = ways_list[i]
+        building1_nodes = [n.location for n in [nodes[id] for id in way_1.nodes]]
+        for j in range(i-1, -1, -1):
+            id_2, way_2 = ways_list[j]
+            building2_nodes = [n.location for n in [nodes[id] for id in way_2.nodes]]
+            print("COMPARING \nB1 ({}): {} \nB2 ({}): {}".format(id_1, building1_nodes, id_2, building2_nodes))
+            if has_intersection(building1_nodes, building2_nodes):
+                print("COLLISION BETWEEN {} and {}".format(id_1, id_2))
+                ways.pop(id_1)
+                for n_id in way_1.nodes:
+                    nodes.pop(n_id, None) # the last node in the way is repeated
+                break
+
+    print("Generated {} ways".format(len(ways.items())))
     return nodes, ways
 
 def parseArgs(args):
