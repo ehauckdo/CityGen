@@ -41,7 +41,6 @@ def angleFromCoordinate(lat1, long1, lat2, long2):
     x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
 
     brng = math.atan2(y, x);
-    return brng
 
     brng = math.degrees(brng);
     brng = (brng + 360) % 360;
