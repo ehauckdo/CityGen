@@ -1,5 +1,4 @@
-import os
-import sys
+import os, sys
 import random
 import copy
 import handler
@@ -7,12 +6,16 @@ import optparse
 import osmnx as ox
 import networkx as nx
 import numpy as np
+import trigonometry as trig
+import matplotlib.pyplot as plt
+import line
+import math
 from Node import Node
 from lib.NZRenderer import render
 from lib.NZMap import readFile
 from Map import Cell, OSMWay, OSMNode
 from preprocess import get_bounds
-import parallel_line
+
 
 index = 0
 total = 0
@@ -25,64 +28,11 @@ def save_data(filename, ways, nodes):
     handler.insert_bounds(filename, min_lat, min_lon, max_lat, max_lon)
 
 def next_color():
-    global index
-    global colors
+    global index, colors
     index += 1
     if index >= len(colors):
         index = 0
     return colors[index]
-
-# ===== GEOMETRY FUNCTIONS ======
-def intersect(x1, y1, x2, y2, x3, y3, x4, y4):
-    # I got this implementation from the internet and it appears to work
-    # I can implement my own using the cross product vector based approach
-    # where p * tr = q * us
-    def ccw(x1, y1, x2, y2, x3, y3):
-        return (y3-y1) * (x2-x1) > (y2-y1) * (x3-x1)
-    return (ccw(x1,y1, x3,y3, x4,y4) != ccw(x2,y2, x3,y3, x4,y4) and
-           ccw(x1,y1, x2,y2, x3,y3) != ccw(x1,y1, x2,y2, x4,y4))
-
-def has_intersection(polygon1, polygon2):
-    # Check if there is any intersection between pairs of edges of polygons
-    for i in range(len(polygon1)-1):
-        x1, y1 = polygon1[i]
-        x2, y2 = polygon1[i+1]
-        for j in range(len(polygon2)-1):
-            x3, y3 = polygon2[j]
-            x4, y4 = polygon2[j+1]
-            if intersect(x1, y1, x2, y2, x3, y3, x4, y4):
-                return True
-    return False
-
-def point_inside_polygon(x, y, polygon):
-    count = 0
-    for i in range(len(polygon)-1):
-        x1, y1 = polygon[i]
-        x2, y2 = polygon[i+1]
-        if (y > y1 and y < y2) or (y > y2 and y < y1):
-            m = (y2-y1)/(x2-x1)
-            ray_x = x1 + (y - y1)/m
-            if ray_x > x:  count +=1
-    return count % 2 == 1
-
-def is_inside(polygon1, polygon2):
-    #print("Checking if poylgon1: \n {}".format(polygon1))
-    #print("is inside polygon2: \n {}".format(polygon2))
-
-    if has_intersection(polygon1, polygon2):
-        print("NO INTERSECTION")
-        return False
-    else:
-        print("HAS INTERSECTION")
-
-    # If no intersection is found, we just need to check that at least
-    # 1 point of pol1 is within pol2, we do this approximately here
-    for x, y in polygon1:
-        if point_inside_polygon(x, y, polygon2):
-            return True
-    print("NO POINT INSIDE")
-    return False
-# ===============================
 
 def set_node_type(ways, nodes):
     for n in nodes.values():
@@ -112,8 +62,7 @@ def color_ways(ways, nodes, ways_colors, nodes_colors, default="black"):
                 nodes[n_id].color = default
 
 def plot(nodes, ways):
-    import networkx as nx
-    import matplotlib.pyplot as plt
+
     G = nx.Graph()
     pos = {}
 
@@ -126,15 +75,7 @@ def plot(nodes, ways):
             n1, n2 = way.nodes[i], way.nodes[i+1]
             G.add_edge(n1, n2, width=1, edge_color=way.color)
 
-    options = {
-    #"node_color": "black",
-    "node_size": 20,
-    "linewidths": 0,
-    #"width": 0.1,
-    }
-    # for x in nodes.values():
-    #     print(x.id, x.location)
-    #     print(x.color)
+    options = { "node_size": 20, "linewidths": 0, }
     node_color = [x.color for x in nodes.values()]
     edges = G.edges()
     edge_width = [G[u][v]['width'] for u,v in edges]
@@ -144,91 +85,37 @@ def plot(nodes, ways):
 
 def get_cycles(input_file):
     G = ox.graph.graph_from_xml(input_file, simplify=False, retain_all=True)
-
     H = nx.Graph(G) # make a simple undirected graph from G
+
     cycles = nx.cycles.cycle_basis(H) # I think a cycle basis should get all the neighborhoods, except
                                       # we'll need to filter the cycles that are too small.
-    # print("Original cycles: ")
-    # for c in cycles:
-    #    print(c)
-    # cycles = [set(cycle) for cycle in cycles if len(cycle) > 2] # Turn the lists into sets for next loop.
-    # print("Set cycles: ")
-    # for c in cycles:
-    #     print(c)
     return cycles
 
+def are_neighbours(n1, n2, ways):
+    # depending on how the cycles are passed, their edges may not be ordered
+    # so it is useful to keep this function here just in case
+    print("Checking neighbours")
+    for id, w in ways.items():
+        #print("Checking way {}".format(w.id))
+        for i in range(len(w.nodes)-1):
+            wn1, wn2 = w.nodes[i], w.nodes[i+1]
+            #print("n1: {}, n2: {}, wn1:{}, wn2: {}".format(n1.id, n2.id, wn1, wn2))
+            if (wn1 == n1.id and wn2 == n2.id) or (wn1 == n2.id and wn2 == n1.id):
+                return True
+        else:
+            fn1, ln2 = w.nodes[0], w.nodes[-1]
+            if (fn1 == n1.id and ln2 == n2.id) or (fn1 == n2.id and ln2 == n1.id):
+                return True
+    return False
+
 id_counter = 993
-def generate_building(lot):
-    print("Generating building inside of {} points".format(len(lot)))
-    if len(lot) <= 0:
-        return {}, {}
-
-    lat, lon = lot[0].location[1], lot[0].location[0]
-    min_lat, min_lon, max_lat, max_lon = lat, lon, lat, lon
-    for node in lot:
-        lat, lon = node.location[1], node.location[0]
-        min_lat = lat if lat < min_lat else min_lat
-        min_lon = lon if lon < min_lon else min_lon
-        max_lat = lat if lat > max_lat else max_lat
-        max_lon = lon if lon > max_lon else max_lon
-
-    print("Min/Max Lat/Lon: {}".format([min_lat, min_lon, max_lat, max_lon]))
-
-    latspace = np.linspace(min_lat, max_lat, 6)
-    min_lat, max_lat = latspace[2], latspace[3]
-    lonspace = np.linspace(min_lon, max_lon, 6)
-    min_lon, max_lon = lonspace[2], lonspace[3]
-    print("Building Coordinates: {}\n".format([min_lat, min_lon, max_lat, max_lon]))
-
-    way = OSMWay()
-    global id_counter
-    way.id = id_counter
-    way.color = "red"
-    id_counter += 1
-
-    def new_node(lon, lat):
-        global id_counter
-        n = OSMNode()
-        n.id = id_counter
-        id_counter += 1
-        n.location = (lon, lat)
-        n.color = "red"
-        return n
-
-    n1 = new_node(min_lon, min_lat)
-    n2 = new_node(max_lon, min_lat)
-    n3 = new_node(max_lon, max_lat)
-    n4 = new_node(min_lon, max_lat)
-    nodes = {n1.id: n1, n2.id: n2, n3.id: n3, n4.id: n4}
-
-    way.nodes = [n1.id, n2.id, n3.id, n4.id, n1.id]
-    way.tags = {"building":"residential"}
-    ways = {way.id:way}
-
-    return nodes, ways
-
-def generate_building_parallel(lot, source_ways):
+def generate_building(lot, source_ways):
     print("Generating building inside of polygon with {} points".format(len(lot)))
     global created, total
-    if len(lot) <= 0:
-        return {}, {}
     nodes, ways = {}, {}
 
-    # the cycles don't have the edges ordered, so this function is required
-    def are_neighbours(n1, n2, ways):
-        print("Checking neighbours")
-        for id, w in ways.items():
-            #print("Checking way {}".format(w.id))
-            for i in range(len(w.nodes)-1):
-                wn1, wn2 = w.nodes[i], w.nodes[i+1]
-                #print("n1: {}, n2: {}, wn1:{}, wn2: {}".format(n1.id, n2.id, wn1, wn2))
-                if (wn1 == n1.id and wn2 == n2.id) or (wn1 == n2.id and wn2 == n1.id):
-                    return True
-            else:
-                fn1, ln2 = w.nodes[0], w.nodes[-1]
-                if (fn1 == n1.id and ln2 == n2.id) or (fn1 == n2.id and ln2 == n1.id):
-                    return True
-        return False
+    if len(lot) <= 0:
+        return nodes, ways
 
     def new_node(lon, lat):
         global id_counter
@@ -247,80 +134,89 @@ def generate_building_parallel(lot, source_ways):
         id_counter += 1
         return way
 
-    for i in range(len(lot)-1):
+    def order_edges_by_size(polygon):
+        ordered = []
+        for i in range(len(polygon)-1):
+             n1 = lot[i]
+             n2 = lot[i+1]
+             x1, y1 = n1.location[0], n1.location[1]
+             x2, y2 = n2.location[0], n2.location[1]
+             dist = trig.dist(x1, y1, x2, y2) #math.sqrt((x2-x1)**2 + (y2-y1)**2)
+             print("DIST: {}".format(dist))
+             ordered.append((dist, (n1,n2)))
+        print("Unordered list: ")
+        for l in ordered:
+            print(l)
+        ordered = sorted(ordered, key = lambda x: x[0])
+        return [x[1] for x in ordered]
 
-        n1 = lot[i]
-        n2 = lot[i+1]
+    edges = order_edges_by_size(lot)
+    for n1, n2 in edges:
+
         print("IDs: {} and {}".format(n1.id, n2.id))
         x1, y1 = n1.location[0], n1.location[1]
         x2, y2 = n2.location[0], n2.location[1]
-        #if not are_neighbours(n1, n2, source_ways):
-        #    continue
 
-        print("Generating building between {} and {}".format((x1, y1), (x2, y2)))
-        a, b, c = parallel_line.get_line_equation(x1, y1, x2, y2)
-        u, v = parallel_line.get_unit_vector(a, b)
-        print("a: {}, b: {}, c: {}".format(a, b, c))
-        print("u: {}, v: {}".format(u, v))
+        dist = math.sqrt((x2-x1)**2 + (y2-y1)**2)
+        # filter smaller edges
+        if dist < 0.0004:
+            continue
 
-        # decrease the width of the building to 1/3 of the edge
-        temp = np.linspace(x1, x2, 4)
-        x1, x2 = temp[1], temp[2]
-        temp = np.linspace(y1, y2, 4)
-        y1, y2 = temp[1], temp[2]
+        print("Generating building between edges {} and {}".format((x1, y1), (x2, y2)))
+        a, b, c = line.get_line_equation(x1, y1, x2, y2)
+        u, v = line.get_unit_vector(a, b)
+        #print("a: {}, b: {}, c: {}".format(a, b, c))
+        #print("u: {}, v: {}".format(u, v))
 
-        d = 0.00005
-        x3, y3, x4, y4 = parallel_line.get_parallel_points(x1, y1, x2, y2, u, v, d)
-        print("p3 lon: {}, lat: {}, p4 lon: {}, lat: {}, ".format(x3,y3,x4,y4))
-        d = 0.00050
-        x5, y5, x6, y6 = parallel_line.get_parallel_points(x1, y1, x2, y2, u, v, d)
-        print("p5 lon: {}, lat: {}, p4 lon: {}, lat: {}, ".format(x5,y5,x6,y6))
+        generate_n = 4
+        div = generate_n*2+2
+        x_range = np.linspace(x1, x2, div)
+        x_values = [(x_range[i], x_range[i+1]) for i in range(div-1) if i % 2 == 1]
+        y_range = np.linspace(y1, y2, div)
+        y_values = [(y_range[i], y_range[i+1]) for i in range(div-1) if i % 2 == 1]
 
-        n1 = new_node(x3, y3)
-        n2 = new_node(x4, y4)
-        n3 = new_node(x6, y6)
-        n4 = new_node(x5, y5)
+        def generate_parallel_building(x1, y1, x2, y2, u, v, dx, dy):
+            global created, total
+            created_nodes, created_ways = {}, {}
+            x3, y3, x4, y4 = line.get_parallel_points(x1, y1, x2, y2, u, v, dx)
+            print("p3 lon: {}, lat: {}, p4 lon: {}, lat: {}, ".format(x3,y3,x4,y4))
+            x5, y5, x6, y6 = line.get_parallel_points(x1, y1, x2, y2, u, v, dy)
+            print("p5 lon: {}, lat: {}, p4 lon: {}, lat: {}, ".format(x5,y5,x6,y6))
 
-        lot_nodes = [x.location for x in lot]
-        lot_nodes.append(lot_nodes[0]) # add last node as an edge
-        building_nodes = [n1.location, n2.location, n3.location, n4.location, n1.location]
-        total += 1
-        if is_inside(building_nodes, lot_nodes):
+            n1 = new_node(x3, y3)
+            n2 = new_node(x4, y4)
+            n3 = new_node(x6, y6)
+            n4 = new_node(x5, y5)
 
-            nodes.update({n1.id: n1, n2.id: n2, n3.id: n3, n4.id: n4})
-            way = new_way()
-            way.nodes = [n1.id, n2.id, n3.id, n4.id, n1.id]
-            way.tags = {"building":"residential"}
-            ways.update({way.id:way})
-            created +=1
+            lot_nodes = [x.location for x in lot]
+            lot_nodes.append(lot_nodes[0]) # add last node as an edge
+            building_nodes = [n1.location, n2.location, n3.location, n4.location, n1.location]
+            total += 1
 
-        d = -0.00005
-        x3, y3, x4, y4 = parallel_line.get_parallel_points(x1, y1, x2, y2, u, v, d)
-        print("p3 lon: {}, lat: {}, p4 lon: {}, lat: {}, ".format(x3,y3,x4,y4))
-        d = -0.00020
-        x5, y5, x6, y6 = parallel_line.get_parallel_points(x1, y1, x2, y2, u, v, d)
-        print("p5 lon: {}, lat: {}, p4 lon: {}, lat: {}, ".format(x5,y5,x6,y6))
+            if trig.is_inside(building_nodes, lot_nodes):
+                #nodes.update({n1.id: n1, n2.id: n2, n3.id: n3, n4.id: n4})
+                way = new_way()
+                way.nodes = [n1.id, n2.id, n3.id, n4.id, n1.id]
+                way.tags = {"building":"residential"}
+                #ways.update({way.id:way})
+                created +=1
+                created_nodes = {n1.id: n1, n2.id: n2, n3.id: n3, n4.id: n4}
+                created_ways = {way.id:way}
 
-        n1 = new_node(x3, y3)
-        n2 = new_node(x4, y4)
-        n3 = new_node(x6, y6)
-        n4 = new_node(x5, y5)
-        lot_nodes = [x.location for x in lot]
-        lot_nodes.append(lot_nodes[0]) # add last node as an edge
-        building_nodes = [n1.location, n2.location, n3.location, n4.location, n1.location]
-        if is_inside(building_nodes, lot_nodes):
+            return created_nodes, created_ways
 
-            nodes.update({n1.id: n1, n2.id: n2, n3.id: n3, n4.id: n4})
-            way = new_way()
-            way.nodes = [n1.id, n2.id, n3.id, n4.id, n1.id]
-            way.tags = {"building":"residential"}
-            ways.update({way.id:way})
-            created +=1
+        for (x1, x2), (y1, y2) in zip(x_values, y_values):
+            dx, dy = 0.00005, 0.00020
+            created_nodes, created_ways = generate_parallel_building(x1, y1, x2, y2, u, v, dx, dy)
+            nodes.update(created_nodes)
+            ways.update(created_ways)
 
-        #break
+            dx, dy = -0.00005, -0.00020
+            created_nodes, created_ways = generate_parallel_building(x1, y1, x2, y2, u, v, dx, dy)
+            nodes.update(created_nodes)
+            ways.update(created_ways)
 
     ways_list = list(ways.items())
-    #for i in range(len(ways_list)-1):
     for i in range(len(ways_list)-1, 0, -1):
         id_1, way_1 = ways_list[i]
         building1_nodes = [n.location for n in [nodes[id] for id in way_1.nodes]]
@@ -328,7 +224,7 @@ def generate_building_parallel(lot, source_ways):
             id_2, way_2 = ways_list[j]
             building2_nodes = [n.location for n in [nodes[id] for id in way_2.nodes]]
             print("COMPARING \nB1 ({}): {} \nB2 ({}): {}".format(id_1, building1_nodes, id_2, building2_nodes))
-            if has_intersection(building1_nodes, building2_nodes):
+            if trig.has_intersection(building1_nodes, building2_nodes):
                 print("COLLISION BETWEEN {} and {}".format(id_1, id_2))
                 ways.pop(id_1)
                 for n_id in way_1.nodes:
@@ -354,25 +250,32 @@ def main():
 
     nodes, ways = handler.extract_data(input)
 
+    # preprocess nodes, add some properties to them
     set_node_type(ways, nodes)
     color_nodes(nodes.values(), "black")
     ways_colors = nodes_colors = {"building":"red", "highway":"black"}
     color_ways(ways, nodes, ways_colors, nodes_colors, default="black")
 
+    # get all cycles in the graph
     cycles = get_cycles(input)
 
     # remove cycles that do not represent streets
     for i in range(len(cycles)-1, -1, -1):
+        cycles[i].append(cycles[i][0])
         for n_id in cycles[i]:
             if nodes[n_id].type != "highway":
                 cycles.pop(i)
                 break
 
+    # generate buildings for each cycle
     for cycle in cycles:
-        # n, a = generate_building([nodes[x] for x in cycle])
-        n, a = generate_building_parallel([nodes[x] for x in cycle], ways)
+        # try:
+        n, a = generate_building([nodes[x] for x in cycle], ways)
         nodes.update(n)
         ways.update(a)
+        # except:
+        #     print("Error at cycle: {}".format(cycle))
+        #     sys.exit()
 
     print("Number of edges: {}".format(total))
     print("Created buildings: {}".format(created))
