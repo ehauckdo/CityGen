@@ -39,17 +39,14 @@ def is_inside(polygon1, polygon2):
     #print("Checking if poylgon1: \n {}".format(polygon1))
     #print("is inside polygon2: \n {}".format(polygon2))
     if has_intersection(polygon1, polygon2):
-        print("NO INTERSECTION")
         return False
-    else:
-        print("HAS INTERSECTION")
 
-    # If no intersection is found, we just need to check that at least
-    # 1 point of pol1 is within pol2, we do this approximately here
+    # If no intersection is found, we just need to check that
+    # at least 1 point of pol1 is within pol2
     for x, y in polygon1:
         if point_inside_polygon(x, y, polygon2):
             return True
-    print("NO POINT INSIDE")
+
     return False
 
 def get_boundingbox(polygon):
