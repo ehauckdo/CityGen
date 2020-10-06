@@ -1,6 +1,6 @@
 
 # Finds the bounding box that encompasses all the nodes
-# in the list. The border coordinates are given an extract
+# in the list. The border coordinates are given an extra
 # margin to help with visualization.
 # params: list of nodes, extra margin for the bounds
 # returns: min_lat, min_lon, max_lat, max_lon

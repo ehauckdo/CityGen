@@ -12,23 +12,23 @@ import logging
 import line
 import math
 import time
+import helper
 from Node import Node
 from lib.NZRenderer import render
 from lib.NZMap import readFile
 from Map import Cell, OSMWay, OSMNode
 from preprocess import get_bounds
 
-
 index = 0
 total = 0
 created = 0
-colors = ["b","g","r","c","m","y"]
+colors = ["b","g","c","m","y"]
 tic = time.perf_counter()
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG, filemode='w', filename='main.log')
+#logging.getLogger().addHandler(logging.StreamHandler())
 
 def elapsed(string=None):
     toc = time.perf_counter()
-    #return("{:.2f}s --- {}".format(toc - tic, string))
     return "{:.2f}s".format(toc-tic)
 
 def log(string, level="INFO", show_time=True):
@@ -55,7 +55,7 @@ def set_node_type(ways, nodes):
         n.type = "unspecified"
 
     for w_id, w in ways.items():
-        type = "highway" if "highway" in w.tags.keys() else "other"
+        type = "highway" if "highway" in w.tags else "other"
         for n_id in w.nodes:
             nodes[n_id].type = type
 
@@ -67,7 +67,7 @@ def color_ways(ways, nodes, ways_colors, nodes_colors, default="black"):
 
     for id, way in ways.items():
         for tag, color in ways_colors.items():
-            if tag in way.tags.keys():
+            if tag in way.tags:
                 way.color = color
                 for n_id in way.nodes:
                     nodes[n_id].color = nodes_colors[tag]
@@ -77,23 +77,38 @@ def color_ways(ways, nodes, ways_colors, nodes_colors, default="black"):
             for n_id in way.nodes:
                 nodes[n_id].color = default
 
-def plot(nodes, ways):
+def plot(nodes, ways, tags=None):
 
     G = nx.Graph()
     pos = {}
 
-    for n_id, n in nodes.items():
-        G.add_node(n_id)
-        pos[n_id] = n.location
-
     for w_id, way in ways.items():
+        parse_way = False
+        if tags == None:
+            parse_way = True
+        else:
+            for k, v in tags:
+                if k in way.tags and (way.tags[k] == v or v == None):
+                    parse_way = True
+                    break
+
+        if parse_way == False:
+            continue
+
+        log("Way accepted into plot with tags: {}".format(way.tags), "DEBUG")
         for i in range(len(way.nodes)-1):
             n1, n2 = way.nodes[i], way.nodes[i+1]
+            if n1 not in pos:
+                G.add_node(n1, node_color=nodes[n1].color)
+                pos[n1] = nodes[n1].location
+            if n2 not in pos:
+                G.add_node(n2, node_color=nodes[n2].color)
+                pos[n2] = nodes[n2].location
             G.add_edge(n1, n2, width=1, edge_color=way.color)
 
-    options = { "node_size": 20, "linewidths": 0, }
-    node_color = [x.color for x in nodes.values()]
+    options = { "node_size": 20, "linewidths": 0}
     edges = G.edges()
+    node_color = nx.get_node_attributes(G,'node_color').values()
     edge_width = [G[u][v]['width'] for u,v in edges]
     edge_color = [G[u][v]['edge_color'] for u,v in edges]
     nx.draw(G, pos, node_color=node_color, edge_color=edge_color, width=edge_width, **options)
@@ -124,9 +139,7 @@ def are_neighbours(n1, n2, ways):
     return False
 
 id_counter = 993
-def generate_building(lot, source_ways):
-    #logging.info("Generating building inside of a polygon " +
-    #              "with {} points".format(len(lot)))
+def generate_building(lot, source_ways, data=None):
     global created, total
     nodes, ways = {}, {}
 
@@ -139,14 +152,14 @@ def generate_building(lot, source_ways):
         n.id = id_counter
         id_counter += 1
         n.location = (lon, lat)
-        n.color = "red"
+        n.color = "blue"
         return n
 
     def new_way():
         way = OSMWay()
         global id_counter
         way.id = id_counter
-        way.color = next_color()
+        way.color = "blue"
         id_counter += 1
         return way
 
@@ -157,10 +170,16 @@ def generate_building(lot, source_ways):
              n2 = lot[i+1]
              x1, y1 = n1.location[0], n1.location[1]
              x2, y2 = n2.location[0], n2.location[1]
-             dist = trig.dist(x1, y1, x2, y2) #math.sqrt((x2-x1)**2 + (y2-y1)**2)
+             dist = trig.dist(x1, y1, x2, y2)
              ordered.append((dist, (n1,n2)))
         ordered = sorted(ordered, key = lambda x: x[0])
         return [x[1] for x in ordered]
+
+    def get_next_point(x1,y1,x2,y2,dist):
+        d = trig.dist(x1,y1,x2,y2)
+        x3 = (dist*(x2-x1))/d + x1
+        y3 = (dist*(y2-y1))/d + y1
+        return x3, y3
 
     edges = order_edges_by_size(lot)
     for n1, n2 in edges:
@@ -168,11 +187,10 @@ def generate_building(lot, source_ways):
         log("Nodes: {} and {}".format(n1.id, n2.id), "DEBUG")
         x1, y1 = n1.location[0], n1.location[1]
         x2, y2 = n2.location[0], n2.location[1]
+        dist = trig.dist(x1, y1, x2, y2)
 
-        dist = math.sqrt((x2-x1)**2 + (y2-y1)**2)
-        # filter smaller edges
         if dist < 0.0004:
-            continue
+            continue # filter smaller edges
 
         log("Generating building between edges {} and {}".format((x1, y1),
                                                         (x2, y2)), "DEBUG")
@@ -182,19 +200,47 @@ def generate_building(lot, source_ways):
         #print("a: {}, b: {}, c: {}".format(a, b, c))
         #print("u: {}, v: {}".format(u, v))
 
+        def get_divisor2(x1, y1, x2, y2, maxdist, maxstd):
+            threshold =random.uniform(maxdist-maxstd, maxdist+maxstd)
+            n = 1
+            div = n*2+2
+            x_range = np.linspace(x1, x2, div)
+            y_range = np.linspace(y1, y2, div)
+            test_x1, test_x2 = x_range[0], x_range[1]
+            test_y1, test_y2 = y_range[0], y_range[1]
+            #dist = trig.dist(test_x1, test_y1, test_x2, test_y2)
+            dist = math.sqrt((test_x2-test_x1)**2 + (test_y2-test_y1)**2)
+            while dist > threshold:
+                n += 1
+                div = n*2+2
+                x_range = np.linspace(x1, x2, div)
+                y_range = np.linspace(y1, y2, div)
+                test_x1, test_x2 = x_range[0], x_range[1]
+                test_y1, test_y2 = y_range[0], y_range[1]
+                dist = trig.dist(test_x1, test_y1, test_x2, test_y2)
+                #dist = math.sqrt((test_x2-test_x1)**2 + (test_y2-test_y1)**2)
+                print("{} - {}".format(n, dist))
+            x_values = [(x_range[i], x_range[i+1]) for i in range(div-1) if i % 2 == 1]
+            y_values = [(y_range[i], y_range[i+1]) for i in range(div-1) if i % 2 == 1]
+            return x_values, y_values
+
         generate_n = 4
         div = generate_n*2+2
         x_range = np.linspace(x1, x2, div)
         x_values = [(x_range[i], x_range[i+1]) for i in range(div-1) if i % 2 == 1]
         y_range = np.linspace(y1, y2, div)
         y_values = [(y_range[i], y_range[i+1]) for i in range(div-1) if i % 2 == 1]
+        dx, dy = 0.00010, 0.00010
 
         def generate_parallel_building(x1, y1, x2, y2, u, v, dx, dy):
             global created, total
             created_nodes, created_ways = {}, {}
             x3, y3, x4, y4 = line.get_parallel_points(x1, y1, x2, y2, u, v, dx)
+            dist = math.sqrt((x2-x1)**2 + (y2-y1)**2)
+            x5, y5 = line.get_pont_in_line(x1,y1,x3,y3,dist)
+            x6, y6 = line.get_pont_in_line(x2,y2,x4,y4,dist)
             #log("p3 lon: {}, lat: {}, p4 lon: {}, lat: {}, ".format(x3,y3,x4,y4))
-            x5, y5, x6, y6 = line.get_parallel_points(x1, y1, x2, y2, u, v, dy)
+            #x5, y5, x6, y6 = line.get_parallel_points(x1, y1, x2, y2, u, v, dy)
             #print("p5 lon: {}, lat: {}, p4 lon: {}, lat: {}, ".format(x5,y5,x6,y6))
 
             n1 = new_node(x3, y3)
@@ -219,13 +265,15 @@ def generate_building(lot, source_ways):
             return created_nodes, created_ways
 
         for (x1, x2), (y1, y2) in zip(x_values, y_values):
-            dx, dy = 0.00005, 0.00020
+            # dx = distance of the wall to the street
+            # dy = distance of the front wall to the rear wall
+            #dx, dy = 0.00005, 0.00020
             created_nodes, created_ways = generate_parallel_building(x1, y1, x2, y2, u, v, dx, dy)
             nodes.update(created_nodes)
             ways.update(created_ways)
 
-            dx, dy = -0.00005, -0.00020
-            created_nodes, created_ways = generate_parallel_building(x1, y1, x2, y2, u, v, dx, dy)
+            #dx, dy = -0.00005, -0.00020
+            created_nodes, created_ways = generate_parallel_building(x1, y1, x2, y2, u, v, -dx, -dy)
             nodes.update(created_nodes)
             ways.update(created_ways)
 
@@ -278,6 +326,67 @@ def scan_buildings(ways, nodes):
         std_min, std_max = 0, 0
     return number_edges, avg_min, std_min, avg_max, std_max
 
+def scan_cycles(nodes, cycles):
+    areas = []
+    log("Scanning cycles to fetch area...", "DEBUG")
+    for c in cycles:
+        points = [n.location for n_id, n in nodes.items() if n_id in c]
+        area = helper.get_area(points)
+        log("Area of cycle: {}".format(area), "DEBUG")
+        areas.append(area)
+    return min(areas), max(areas), np.average(areas), np.std(areas)
+
+def remove_cycles_type(nodes, cycles, type):
+    # remove cycles that do not represent streets
+    for i in range(len(cycles)-1, -1, -1):
+        cycles[i].append(cycles[i][0])
+        for n_id in cycles[i]:
+            if nodes[n_id].type != type:
+                cycles.pop(i)
+                break
+    return cycles
+
+def remove_nonempty_cycles(nodes, cycles, matrix, lon_range, lat_range):
+    empty_cycles_count = 0
+    empty_cycles = []
+    for cycle in cycles:
+        log("Nodes in Cycle:", "DEBUG")
+        for n_id in cycle:
+            log("{} - {}".format(n_id, nodes[n_id].location), "DEBUG")
+
+        min_lat, min_lon, max_lat, max_lon = get_bounds([nodes[x] for x in cycle])
+        log("Bounds of cycle: {}".format((min_lat, min_lon, max_lat, max_lon)))
+        x_min, y_min, x_max, y_max = helper.nodes_in_area(min_lat, min_lon,
+                                     max_lat, max_lon, lat_range, lon_range)
+        detected_nodes = {}
+        for x in range(x_min, x_max+1):
+            for y in range(y_min, y_max+1):
+                node_ids_list = matrix[x][y]
+                for n_id in node_ids_list:
+                    detected_nodes[n_id] = nodes[n_id]
+
+        log("Detected nodes: ", "DEBUG")
+        for n_id, n in detected_nodes.items():
+            log("{} - {}".format(n_id, n.location), "DEBUG")
+
+        cycle_polygon = [n.location for n in [nodes[id] for id in cycle]]
+
+        for n_id in cycle[:-1]:
+           log("Attempting to delete {} from detected_nodes".format(n_id), "DEBUG")
+           del detected_nodes[n_id]
+
+        log("Cycle polygon: {}".format(cycle_polygon))
+        for id, n in detected_nodes.items():
+           lon, lat = n.location
+           if trig.point_inside_polygon(lon, lat, cycle_polygon):
+               log("Node inside cycle detected!")
+               break
+        else:
+            empty_cycles_count += 1
+            empty_cycles.append(cycle)
+
+    return empty_cycles, empty_cycles_count
+
 def parseArgs(args):
 	usage = "usage: %prog [options]"
 	parser = optparse.OptionParser(usage=usage)
@@ -295,8 +404,19 @@ def main():
 
     nodes, ways = handler.extract_data(input)
     log("Data read sucessfully.")
+    log("Total nodes: {}".format(len(nodes.values())))
+    log("Total ways: {}".format(len(ways.values())))
+
+    min_lat, min_lon, max_lat, max_lon = get_bounds(nodes.values())
+    matrix, lon_range, lat_range = helper.split_into_matrix(min_lat,
+                                            min_lon, max_lat, max_lon, nodes)
 
     number_edges, min_dist, std_min, max_dist, std_max = scan_buildings(ways, nodes)
+    edge_data = {"number_edges": number_edges,
+            "min_dist": min_dist,
+            "std_min": std_min,
+            "max_dist": max_dist,
+            "std_max": std_max}
 
     log("Building data collected succesfully.")
     log("Building data: min_dist:{:f}, std_min:{:f}".format(min_dist, std_min) +
@@ -307,37 +427,48 @@ def main():
     color_nodes(nodes.values(), "black")
     ways_colors = nodes_colors = {"building":"red", "highway":"black"}
     color_ways(ways, nodes, ways_colors, nodes_colors, default="black")
-    log("Nodes collored sucessfully.")
+    log("Nodes preprocessed sucessfully.")
 
     # get all cycles in the graph
     cycles = get_cycles(input)
     total_cycles = len(cycles)
 
-    # remove cycles that do not represent streets
-    for i in range(len(cycles)-1, -1, -1):
-        cycles[i].append(cycles[i][0])
-        for n_id in cycles[i]:
-            if nodes[n_id].type != "highway":
-                cycles.pop(i)
-                break
-    log("{}/{} building cycles were identified.".format(len(cycles),
+    cycles = remove_cycles_type(nodes, cycles, "highway")
+    highway_cycles = len(cycles)
+    log("{}/{} highway cycles were identified.".format(highway_cycles,
                                                     total_cycles))
 
-    # generate buildings for each cycle
-    for cycle in cycles:
-        # try:
-        n, a = generate_building([nodes[x] for x in cycle], ways)
-        nodes.update(n)
-        ways.update(a)
-        # except:
-        #     print("Error at cycle: {}".format(cycle))
-        #     sys.exit()
+    min_area, max_area, avg_area, std_area = scan_cycles(nodes, cycles)
+    cycle_data = {"min_area": min_area,
+             "max_area": max_area,
+             "avg_area": avg_area,
+             "max_dist": max_dist,
+             "std_area": std_area}
+    log(cycle_data)
 
+    cycles, empty_count = remove_nonempty_cycles(nodes, cycles, matrix, lon_range, lat_range)
+
+    for cycle in cycles:
+        try:
+            n, a = generate_building([nodes[x] for x in cycle], ways)
+            nodes.update(n)
+            ways.update(a)
+        except:
+            print("Error at cycle: {}".format(cycle))
+            sys.exit()
+
+    log("Total cycles: {}".format(total_cycles))
+    log("Highway cycles: {}".format(highway_cycles))
+    log("Empty highway cycles: {}".format(empty_count))
     log("{} buildings were generated in {} edges.".format(created, total))
 
-    #plot(nodes, ways)
-
     save_data("output_{}".format(input), ways.values(), nodes.values())
+    log("OSM file saved as 'output_{}'".format(input))
+    #plot_tags = [("highway",None)]
+                 #("highway","trunk"),
+                 #("highway","residential")]
+    plot_tags = None
+    plot(nodes, ways, plot_tags)
 
 if __name__ == '__main__':
     main()
