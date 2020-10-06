@@ -57,3 +57,64 @@ def get_boundingbox(polygon):
         min_y = y if y < min_y else min_y
         max_x = x if x > max_x else max_x
         max_y = y if y > max_y else max_y
+
+def get_parallel_points(x1, y1, x2, y2, u, v, d):
+    return x1 + d*u, y1 + d*v, x2 + d*u, y2 + d*v
+
+def get_unit_vector(a, b):
+    import math
+    l = 1 / math.sqrt(a**2 + b**2)
+    u = l * a
+    v = l * b
+    return u, v
+
+def get_line_equation(x1, y1, x2, y2):
+    a = y1 - y2
+    b = x2 - x1
+    c = (-(y1 - y2))*x1 + (x1 - x2)*y1
+    return a, b, c
+
+def get_pont_in_line(x1,y1,x2,y2,dist):
+    d = math.sqrt((x2-x1)**2 + (y2-y1)**2)
+    x3 = (dist*(x2-x1))/d + x1
+    y3 = (dist*(y2-y1))/d + y1
+    return x3, y3
+
+def get_angle(lat1, long1, lat2, long2):
+    import math
+    dLon = (long2 - long1)
+
+    y = math.sin(dLon) * math.cos(lat2)
+    x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dLon)
+
+    brng = math.atan2(y, x)
+
+    brng = math.degrees(brng)
+    brng = (brng + 360) % 360
+    brng = 360 - brng # count degrees clockwise - remove to make counter-clockwise
+
+    return brng
+
+def line_manipulation_demo():
+
+    # points in a line
+    x1, y1 = 4, 5
+    x2, y2 = 7, 9
+    print(x1, y1, x2, y2)
+
+    # a, b, c terms that define the line
+    a, b, c = get_line_equation(x1, y1, x2, y2)
+    print(a, b, c)
+
+    # unit vector of a perpendicular vector to the line given by a, b
+    u, v = get_unit_vector(a, b)
+    print(u, v)
+
+    # calculate p3 and p4 given a multiple of the perpendicular unit vector
+    d = 5
+    x3, y3, x4, y4 = get_parallel_points(x1, y1, x2, y2, u, v, d)
+    print(x3, y3, x4, y4)
+
+    d = 1
+    x3, y3, x4, y4 = get_parallel_points(x1, y1, x2, y2, u, v, d)
+    print(x3, y3, x4, y4)
