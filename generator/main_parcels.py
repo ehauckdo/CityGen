@@ -19,10 +19,9 @@ from lib.NZMap import readFile
 from Map import Cell, OSMWay, OSMNode
 from preprocess import get_bounds
 
-index = 0
 total = 0
 created = 0
-colors = ["b","g","c","m","y"]
+
 tic = time.perf_counter()
 logging.basicConfig(level=logging.DEBUG, filemode='w', filename='main.log')
 #logging.getLogger().addHandler(logging.StreamHandler())
@@ -42,40 +41,6 @@ def save_data(filename, ways, nodes):
     handler.write_data(filename, nodes, ways)
     min_lat, min_lon, max_lat, max_lon = get_bounds(nodes)
     handler.insert_bounds(filename, min_lat, min_lon, max_lat, max_lon)
-
-def next_color():
-    global index, colors
-    index += 1
-    if index >= len(colors):
-        index = 0
-    return colors[index]
-
-def set_node_type(ways, nodes):
-    for n in nodes.values():
-        n.type = "unspecified"
-
-    for w_id, w in ways.items():
-        type = "highway" if "highway" in w.tags else "other"
-        for n_id in w.nodes:
-            nodes[n_id].type = type
-
-def color_nodes(nodes, color):
-    for n in nodes:
-        n.color = color
-
-def color_ways(ways, nodes, ways_colors, nodes_colors, default="black"):
-
-    for id, way in ways.items():
-        for tag, color in ways_colors.items():
-            if tag in way.tags:
-                way.color = color
-                for n_id in way.nodes:
-                    nodes[n_id].color = nodes_colors[tag]
-                break
-        else:
-            way.color = default
-            for n_id in way.nodes:
-                nodes[n_id].color = default
 
 def plot(nodes, ways, tags=None):
 
@@ -121,22 +86,6 @@ def get_cycles(input_file):
     cycles = nx.cycles.cycle_basis(H) # I think a cycle basis should get all the neighborhoods, except
                                       # we'll need to filter the cycles that are too small.
     return cycles
-
-def are_neighbours(n1, n2, ways):
-    # depending on how the cycles are passed, their edges may not be ordered
-    # so it is useful to keep this function here just in case
-    for id, w in ways.items():
-        #print("Checking way {}".format(w.id))
-        for i in range(len(w.nodes)-1):
-            wn1, wn2 = w.nodes[i], w.nodes[i+1]
-            #print("n1: {}, n2: {}, wn1:{}, wn2: {}".format(n1.id, n2.id, wn1, wn2))
-            if (wn1 == n1.id and wn2 == n2.id) or (wn1 == n2.id and wn2 == n1.id):
-                return True
-        else:
-            fn1, ln2 = w.nodes[0], w.nodes[-1]
-            if (fn1 == n1.id and ln2 == n2.id) or (fn1 == n2.id and ln2 == n1.id):
-                return True
-    return False
 
 id_counter = 993
 def generate_building(lot, source_ways, data=None):
@@ -296,7 +245,7 @@ def generate_building(lot, source_ways, data=None):
     log("Generated a total of {} ways".format(len(ways.items())), "DEBUG")
     return nodes, ways
 
-def scan_buildings(ways, nodes):
+def get_buildings_data(ways, nodes):
     number_edges = {}
     min_dist, max_dist = [], []
 
@@ -326,7 +275,7 @@ def scan_buildings(ways, nodes):
         std_min, std_max = 0, 0
     return number_edges, avg_min, std_min, avg_max, std_max
 
-def scan_cycles(nodes, cycles):
+def get_cycles_data(nodes, cycles):
     areas = []
     log("Scanning cycles to fetch area...", "DEBUG")
     for c in cycles:
@@ -411,7 +360,8 @@ def main():
     matrix, lon_range, lat_range = helper.split_into_matrix(min_lat,
                                             min_lon, max_lat, max_lon, nodes)
 
-    number_edges, min_dist, std_min, max_dist, std_max = scan_buildings(ways, nodes)
+    number_edges, min_dist, std_min, max_dist, std_max = get_buildings_data(
+                                                                   ways, nodes)
     edge_data = {"number_edges": number_edges,
             "min_dist": min_dist,
             "std_min": std_min,
@@ -423,10 +373,10 @@ def main():
         ", max_dist: {:f}, std_max:{:f}".format(max_dist, std_max))
 
     # preprocess nodes, add some properties to them
-    set_node_type(ways, nodes)
-    color_nodes(nodes.values(), "black")
+    helper.set_node_type(ways, nodes)
+    helper.color_nodes(nodes.values(), "black")
     ways_colors = nodes_colors = {"building":"red", "highway":"black"}
-    color_ways(ways, nodes, ways_colors, nodes_colors, default="black")
+    helper.color_ways(ways, nodes, ways_colors, nodes_colors, default="black")
     log("Nodes preprocessed sucessfully.")
 
     # get all cycles in the graph
@@ -438,7 +388,7 @@ def main():
     log("{}/{} highway cycles were identified.".format(highway_cycles,
                                                     total_cycles))
 
-    min_area, max_area, avg_area, std_area = scan_cycles(nodes, cycles)
+    min_area, max_area, avg_area, std_area = get_cycles_data(nodes, cycles)
     cycle_data = {"min_area": min_area,
              "max_area": max_area,
              "avg_area": avg_area,
