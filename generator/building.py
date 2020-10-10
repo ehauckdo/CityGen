@@ -6,21 +6,23 @@ import math
 
 id_counter = 993
 
-def new_node(lon, lat):
+def new_node(lon, lat, color="black"):
     global id_counter
     n = OSMNode()
     n.id = id_counter
     id_counter += 1
     n.location = (lon, lat)
-    n.color = "blue"
+    n.color = color
     return n
 
-def new_way():
+def new_way(nodes=[], tags={}):
     way = OSMWay()
     global id_counter
     way.id = id_counter
     way.color = "blue"
     id_counter += 1
+    way.nodes = nodes
+    way.tags = tags
     return way
 
 def order_edges_by_size(polygon):

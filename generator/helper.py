@@ -9,6 +9,19 @@ def get_area(points):
     polygon = {'type':'Polygon','coordinates':[coordinates]}
     return area(polygon)
 
+     # def polygon_area(x,y):
+     #     # coordinate shift
+     #     x_ = x - x.mean()
+     #     y_ = y - y.mean()
+     #     # everything else is the same as maxb's code
+     #     correction = x_[-1] * y_[0] - y_[-1]* x_[0]
+     #     main_area = np.dot(x_[:-1], y_[1:]) - np.dot(y_[:-1], x_[1:])
+     #     return 0.5*np.abs(main_area + correction)
+     #
+     # x = np.array([p[0] for p in points])
+     # y = np.array([p[1] for p in points])
+     # return polygon_area(x,y)
+
 def split_into_matrix(min_lat, min_lon, max_lat, max_lon, nodes, n=1000):
     lat_range = np.linspace(min_lat, max_lat, n)[1:]
     lon_range = np.linspace(min_lon, max_lon, n)[1:]
@@ -48,7 +61,7 @@ def color_nodes(nodes, color):
         n.color = color
 
 def color_ways(ways, nodes, ways_colors, nodes_colors, default="black"):
-
+    tags = {}
     for id, way in ways.items():
         for tag, color in ways_colors.items():
             if tag in way.tags:
@@ -60,6 +73,44 @@ def color_ways(ways, nodes, ways_colors, nodes_colors, default="black"):
             way.color = default
             for n_id in way.nodes:
                 nodes[n_id].color = default
+
+def color_highways(ways, nodes):
+    import matplotlib.pyplot as plt
+    pltcolors = iter([plt.cm.Set1(i) for i in range(8)]+
+                     [plt.cm.Dark2(i) for i in range(8)]+
+                     [plt.cm.tab10(i) for i in range(10)])
+    # assigns a color for each appearing highway value in the
+    # passed ways. It gets too colorful and hard to understand
+    def all_labels(ways, pltcolors):
+        tags = {}
+        for id, way in ways.items():
+            if "highway" in way.tags:
+                tag = way.tags["highway"]
+                if tag not in tags:
+                    tags[tag] = next(pltcolors)
+                way.color = tags[tag]
+        return tags
+
+    # assigns colors for specific highways and group all the
+    # others into a single color
+    def assigned_labels(ways, pltcolors):
+        search_tags = ["trunk","primary","secondary","tertiary"]
+        other = "gray"
+        tags = {}
+        for id, way in ways.items():
+            if "highway" in way.tags:
+                tag = way.tags["highway"]
+                if tag not in search_tags:
+                    way.color = other
+                else:
+                    if tag not in tags:
+                        tags[tag] = next(pltcolors)
+                    way.color = tags[tag]
+        tags["others"] = other
+        return tags
+
+    tags = assigned_labels(ways, pltcolors)
+    return tags
 
 def are_neighbours(n1, n2, ways):
     # depending on how the cycles are passed, their edges may not be ordered

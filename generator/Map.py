@@ -23,7 +23,7 @@ class Map(osmium.SimpleHandler):
     def get_ways_by_tag(self, tag):
         ways = []
         for id, w in self.ways.items():
-            if "highway" in w.tags.keys():
+            if tag in w.tags.keys():
                 ways.append(w)
         return ways
 
@@ -82,15 +82,6 @@ class OSMWay():
 
     #def __repr__(self):
     #    return str(self.__dict__)
-
-class NodeRef():
-    def __init__(self, obj):
-        self.ref = obj.ref
-        self.location = obj.location
-        self.x = obj.x
-        self.y = obj.y
-    def __repr__(self):
-        return str(self.ref)
 
 class Cell():
     def __init__(self, ways={}, nodes={}):

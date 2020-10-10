@@ -13,12 +13,18 @@ def extract_data(input):
 # writes the osm XML file for the list of nodes and ways
 # returns: None
 def write_data(filename, nodes, ways):
-    try:
-        os.remove(filename) #clean file if exists
-    except: pass
+    delete_file(filename)
     writer = osmium.SimpleWriter(filename)
     for n in nodes: writer.add_node(n)
     for w in ways:  writer.add_way(w)
+
+    min_lat, min_lon, max_lat, max_lon = get_bounds(nodes)
+    insert_bounds(filename, min_lat, min_lon, max_lat, max_lon)
+
+def delete_file(filename):
+    try:
+        os.remove(filename) #clean file if exists
+    except: pass
 
 # params: a filename and the bounds of a osm file
 # rewrites the osm XML file containing the bounds tag
@@ -33,3 +39,26 @@ def insert_bounds(filename, min_lat, min_lon, max_lat, max_lon):
     with open(filename, 'w') as f:
         for line in lines:
             f.write(line)
+
+# Finds the bounding box that encompasses all the nodes
+# in the list. The border coordinates are given an extra
+# margin to help with visualization.
+# params: list of nodes, extra margin for the bounds
+# returns: min_lat, min_lon, max_lat, max_lon
+def get_bounds(nodes, ex=0.002):
+    base_lon, base_lat = list(nodes)[0].location
+    min_lat, min_lon, max_lat, max_lon = base_lat, base_lon, base_lat, base_lon
+    for n in nodes:
+        # there are two possible formating options for Location
+        # this try catch block tries to handle both
+        try:
+            lon, lat = n.location[0], n.location[1]
+        except:
+            lon, lat = n.location.lon, n.location.lat
+
+        if lon < min_lon: min_lon = lon
+        if lon > max_lon: max_lon = lon
+        if lat < min_lat: min_lat = lat
+        if lat > max_lat: max_lat = lat
+    #print(min_lat, min_lon, max_lat, max_lon, ex)
+    return min_lat-ex, min_lon-ex, max_lat+ex, max_lon+ex

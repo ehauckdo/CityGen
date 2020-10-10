@@ -12,6 +12,27 @@ def intersect(x1, y1, x2, y2, x3, y3, x4, y4):
     return (ccw(x1,y1, x3,y3, x4,y4) != ccw(x2,y2, x3,y3, x4,y4) and
            ccw(x1,y1, x2,y2, x3,y3) != ccw(x1,y1, x2,y2, x4,y4))
 
+def my_intersect(x1, y1, x2, y2, x3, y3, x4, y4):
+    # based on https://stackoverflow.com/a/565282
+    p = (x1, y1)
+    r = (x2-x1, y2-y1)
+    q = (x3, y3)
+    s = (x4-x3, y4-y3)
+    def calc(q, p, s, r):
+        t = (q[0]-p[0], q[1]-p[1])
+        t = (t[0]*s[1]) - (t[1]*s[0])
+        t /= (r[0]*s[1]) - (r[1]*s[0])
+        return t
+    rs = (r[0]*s[1]) - (r[1]*s[0])
+    if rs == 0:
+        return False
+    t = calc(q,p,s,r)
+    u = calc(p,q,r,s)
+    # print("t: {}".format(p[0]+ r[0]*t, p[1]+r[1]*t))
+    # print("u: {}".format(q[0]+ s[0]*u, q[1]+s[1]*u))
+    if t >= 0 and t <= 1 and u >= 0 and u <= 1:
+        return (p[0]+ r[0]*t, p[1]+r[1]*t)
+
 def has_intersection(polygon1, polygon2):
     # Check if there is any intersection between pairs of edges of polygons
     for i in range(len(polygon1)-1):
@@ -57,6 +78,7 @@ def get_boundingbox(polygon):
         min_y = y if y < min_y else min_y
         max_x = x if x > max_x else max_x
         max_y = y if y > max_y else max_y
+    return min_x, min_y, max_x, max_y
 
 def get_parallel_points(x1, y1, x2, y2, u, v, d):
     return x1 + d*u, y1 + d*v, x2 + d*u, y2 + d*v
@@ -78,6 +100,12 @@ def get_pont_in_line(x1,y1,x2,y2,dist):
     d = math.sqrt((x2-x1)**2 + (y2-y1)**2)
     x3 = (dist*(x2-x1))/d + x1
     y3 = (dist*(y2-y1))/d + y1
+    return x3, y3
+
+def extend_line(x1,y1,x2,y2,ext=0.1):
+    len_p1_p2 = dist(x1,y1,x2,y2)
+    x3 = x2 + (x2 - x1) / len_p1_p2 * (ext*len_p1_p2)
+    y3 = y2 + (y2 - y1) / len_p1_p2 * (ext*len_p1_p2)
     return x3, y3
 
 def get_angle(lat1, long1, lat2, long2):
