@@ -9,19 +9,6 @@ def get_area(points):
     polygon = {'type':'Polygon','coordinates':[coordinates]}
     return area(polygon)
 
-     # def polygon_area(x,y):
-     #     # coordinate shift
-     #     x_ = x - x.mean()
-     #     y_ = y - y.mean()
-     #     # everything else is the same as maxb's code
-     #     correction = x_[-1] * y_[0] - y_[-1]* x_[0]
-     #     main_area = np.dot(x_[:-1], y_[1:]) - np.dot(y_[:-1], x_[1:])
-     #     return 0.5*np.abs(main_area + correction)
-     #
-     # x = np.array([p[0] for p in points])
-     # y = np.array([p[1] for p in points])
-     # return polygon_area(x,y)
-
 def split_into_matrix(min_lat, min_lon, max_lat, max_lon, nodes, n=1000):
     lat_range = np.linspace(min_lat, max_lat, n)[1:]
     lon_range = np.linspace(min_lon, max_lon, n)[1:]

@@ -1,4 +1,6 @@
 import math
+import matplotlib
+import numpy as np
 
 def dist(x1, y1, x2, y2):
     return math.sqrt((x2-x1)**2 + (y2-y1)**2)
@@ -55,6 +57,14 @@ def point_inside_polygon(x, y, polygon):
             ray_x = x1 + (y - y1)/m
             if ray_x > x:  count +=1
     return count % 2 == 1
+
+def point_inside_polygon2(x, y, polygon):
+    # source: https://stackoverflow.com/a/23453678
+    test_polygon = [point for point in polygon]
+
+    bb_path = matplotlib.path.Path(np.array(test_polygon))
+    return bb_path.contains_point((x, y))
+
 
 def is_inside(polygon1, polygon2):
     #print("Checking if poylgon1: \n {}".format(polygon1))

@@ -3,6 +3,7 @@ import trigonometry as trig
 import numpy as np
 import random
 import math
+import logging
 
 id_counter = 993
 
@@ -106,6 +107,8 @@ def generate_in_cycle(lot, source_ways, data=None):
     if len(lot) <= 0:
         return nodes, ways
 
+    logging.info("Generating buildings in cycle with {} nodes.".format(len(lot)))
+
     edges = order_edges_by_size(lot)
     for n1, n2 in edges:
 
@@ -117,21 +120,21 @@ def generate_in_cycle(lot, source_ways, data=None):
         if dist < 0.0004:
             continue # filter smaller edges
 
-        #log("Generating building between edges {} and {}".format((x1, y1),
-        #                                                (x2, y2)), "DEBUG")
+        logging.debug("Generating building between edges {} and {}".format((x1, y1),
+                                                        (x2, y2)))
         #total += 1
         a, b, c = trig.get_line_equation(x1, y1, x2, y2)
         u, v = trig.get_unit_vector(a, b)
         #print("a: {}, b: {}, c: {}".format(a, b, c))
         #print("u: {}, v: {}".format(u, v))
 
-        generate_n = 4
+        generate_n = 6
         div = generate_n*2+2
         x_range = np.linspace(x1, x2, div)
         x_values = [(x_range[i], x_range[i+1]) for i in range(div-1) if i % 2 == 1]
         y_range = np.linspace(y1, y2, div)
         y_values = [(y_range[i], y_range[i+1]) for i in range(div-1) if i % 2 == 1]
-        dx, dy = 0.00010, 0.00010
+        dx, dy = 0.00020, 0.00010
 
         for (x1, x2), (y1, y2) in zip(x_values, y_values):
             # dx = distance of the wall to the street
@@ -153,14 +156,14 @@ def generate_in_cycle(lot, source_ways, data=None):
         for j in range(i-1, -1, -1):
             id_2, way_2 = ways_list[j]
             building2_nodes = [n.location for n in [nodes[id] for id in way_2.nodes]]
-            #log("Comparing buildings \nb1 ({}): {} \nb2 ({}): {}".format(
-            #       id_1, building1_nodes, id_2, building2_nodes), "DEBUG")
+            logging.debug("Comparing buildings \nb1 ({}): {} \nb2 ({}): {}".format(
+                  id_1, building1_nodes, id_2, building2_nodes))
             if trig.has_intersection(building1_nodes, building2_nodes):
-                #log("Overlap detected. Removing {}".format(id_1), "DEBUG")
+                logging.debug("Overlap detected. Removing {}".format(id_1))
                 ways.pop(id_1)
                 for n_id in way_1.nodes:
                     nodes.pop(n_id, None) # the last node in the way is repeated
                 break
 
-    #log("Generated a total of {} ways".format(len(ways.items())), "DEBUG")
+    logging.debug("Generated a total of {} ways".format(len(ways.items())))
     return nodes, ways
