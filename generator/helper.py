@@ -1,6 +1,19 @@
 from area import area
 import numpy as np
 from bisect import bisect
+from lib.logger import log
+import trigonometry as trig
+import handler
+import osmnx as ox
+import networkx as nx
+
+def get_cycles(input_file):
+    G = ox.graph.graph_from_xml(input_file, simplify=False, retain_all=True)
+    H = nx.Graph(G) # make a simple undirected graph from G
+
+    cycles = nx.cycles.cycle_basis(H) # I think a cycle basis should get all the neighborhoods, except
+                                      # we'll need to filter the cycles that are too small.
+    return cycles
 
 def get_area(points):
     coordinates = []
@@ -114,6 +127,93 @@ def are_neighbours(n1, n2, ways):
             if (fn1 == n1.id and ln2 == n2.id) or (fn1 == n2.id and ln2 == n1.id):
                 return True
     return False
+
+def get_cycles_data(nodes, cycles):
+    areas = []
+    for c in cycles:
+        points = []
+        for n_id in c:
+            points.append(nodes[n_id].location)
+        area = get_area(points)
+        areas.append(area)
+    return min(areas), max(areas), np.average(areas), np.std(areas)
+
+def remove_nonempty_cycles(nodes, cycles, matrix, lon_range, lat_range):
+    empty_cycles = []
+    for cycle in cycles:
+        log("Nodes in Cycle:", "DEBUG")
+        for n_id in cycle:
+            log("{} - {}".format(n_id, nodes[n_id].location), "DEBUG")
+
+        min_lat, min_lon, max_lat, max_lon = handler.get_bounds(
+                                                    [nodes[x] for x in cycle])
+        log("Bounds of cycle: {}".format((min_lat, min_lon, max_lat, max_lon)))
+        x_min, y_min, x_max, y_max = nodes_in_area(min_lat, min_lon,
+                                     max_lat, max_lon, lat_range, lon_range)
+        detected_nodes = {}
+        for x in range(x_min, x_max+1):
+            for y in range(y_min, y_max+1):
+                node_ids_list = matrix[x][y]
+                for n_id in node_ids_list:
+                    detected_nodes[n_id] = nodes[n_id]
+
+        log("Nodes inside matrix area of cycle: ", "DEBUG")
+        for n_id, n in detected_nodes.items():
+            log("{} - {}".format(n_id, n.location), "DEBUG")
+
+        cycle_polygon = []
+        for n_id in cycle:
+            cycle_polygon.append(nodes[n_id].location)
+
+        # we use set(cycle) in case the cycle list has the same node at
+        # the beginning and end of the list
+        for n_id in set(cycle):
+           log("Attempting to delete {} from detected_nodes".format(n_id)
+                    , "DEBUG")
+           del detected_nodes[n_id]
+
+        log("Cycle polygon: {}".format(cycle_polygon))
+        for id, n in detected_nodes.items():
+           lon, lat = n.location
+           if trig.point_inside_polygon(lon, lat, cycle_polygon):
+               log("Node inside cycle detected! Coord: {}".format((lon,lat)))
+               break
+        else:
+            empty_cycles.append(cycle)
+
+    return empty_cycles
+
+def filter_cycles_by_type(nodes, cycles, wanted_type):
+    # remove cycles containing nodes of an assigned type other than wanted_type
+    for i in range(len(cycles)-1, -1, -1):
+        cycles[i].append(cycles[i][0])
+        for n_id in cycles[i]:
+            if nodes[n_id].type != wanted_type:
+                cycles.pop(i)
+                break
+    return cycles
+
+def filter_by_tag(nodes, ways, tags):
+    _nodes, _ways = {}, {}
+    for way in ways.values():
+        # try to find intersection of keys between two dictionaries
+        intersection = set(way.tags.keys()) & set(tags.keys())
+
+        # check if way[key] is an element of the list in tags[key]
+        # otherwise, if tags[key] is an empty list, accept any value of way[key]
+        if intersection:
+            for key in intersection:
+                if tags[key] == None:
+                    _ways[way.id] = way
+                    for n_id in way.nodes:
+                        _nodes[n_id] = nodes[n_id]
+
+                elif way.tags[key] in tags[key]:
+                    _ways[way.id] = way
+                    for n_id in way.nodes:
+                        _nodes[n_id] = nodes[n_id]
+
+    return _nodes, _ways
 
 index = 0
 colors = ["b","g","c","m","y"]

@@ -47,7 +47,9 @@ def has_intersection(polygon1, polygon2):
                 return True
     return False
 
-def point_inside_polygon(x, y, polygon):
+def point_inside_polygon_raycasting(x, y, polygon):
+    # this implementation has shown errors in some cases
+    # so use of the other function is preferred
     count = 0
     for i in range(len(polygon)-1):
         x1, y1 = polygon[i]
@@ -58,13 +60,11 @@ def point_inside_polygon(x, y, polygon):
             if ray_x > x:  count +=1
     return count % 2 == 1
 
-def point_inside_polygon2(x, y, polygon):
+def point_inside_polygon(x, y, polygon):
     # source: https://stackoverflow.com/a/23453678
     test_polygon = [point for point in polygon]
-
     bb_path = matplotlib.path.Path(np.array(test_polygon))
     return bb_path.contains_point((x, y))
-
 
 def is_inside(polygon1, polygon2):
     #print("Checking if poylgon1: \n {}".format(polygon1))
