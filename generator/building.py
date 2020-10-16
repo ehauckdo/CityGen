@@ -1,5 +1,5 @@
-from Map import OSMWay, OSMNode
-import trigonometry as trig
+from lib.Map import OSMWay, OSMNode
+import lib.trigonometry as trig
 import numpy as np
 import random
 import math

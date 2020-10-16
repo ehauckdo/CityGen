@@ -1,12 +1,13 @@
 import os, sys
-import handler
+import lib.handler as handler
 import optparse
 import numpy as np
-import trigonometry as trig
+import lib.trigonometry as trig
 import logging
-import helper
+import lib.helper as helper
 import building
-import obb
+import random
+import lib.obb as obb
 from lib.logger import elapsed, log
 from lib.plotter import plot
 
@@ -15,6 +16,13 @@ created = 0
 
 logging.basicConfig(level=logging.DEBUG, filemode='w', filename='_main.log')
 #logging.getLogger().addHandler(logging.StreamHandler())
+
+def insert_node_way(nodes, ways, p1, p2, created_node):
+    for way in ways:
+        if p1 in way.nodes and p2 in way.nodes:
+            p1_index = way.nodes.index(p1)
+            p2_index = way.nodes.index(p2)
+            way.nodes.insert(p2_index, created_node)
 
 def generate_parcel(nodes, ways, cycle, cycle_data):
     # TODO: use a more intelligent approach like the one in this answer to get
@@ -55,7 +63,7 @@ def generate_parcel(nodes, ways, cycle, cycle_data):
     # returns 2D obb, uses convex hulls
     # yields decent results for symmetric shapes such as rectangles/squares
     box = obb.minimum_bounding_rectangle(np.array(polygon))
-    #print("Box: {}".format(box))
+    log("Identified Box: {}".format(box))
 
     # ==== plot nodes from obb
     # ==== this is actually unnecessary, only doing it for the viz
@@ -63,9 +71,9 @@ def generate_parcel(nodes, ways, cycle, cycle_data):
     # for lon, lat in box:
     #     n = building.new_node(lon, lat)
     #     n_ids.append(n.id)
-    #     _nodes[n.id] = n
+    #     nodes[n.id] = n
     # w = building.new_way(n_ids + n_ids[:1], {"highway":"primary"})
-    # _ways[w.id] = w
+    # ways[w.id] = w
     # ====
 
     def largest_edge(polygon):
@@ -86,14 +94,24 @@ def generate_parcel(nodes, ways, cycle, cycle_data):
         y = p1[1] + (p2[1] - p1[1])/2
         return x, y
 
+    def get_midpoint2(p1, p2, split=100):
+        #x = p1[0] + (p2[0] - p1[0])/2
+        #y = p1[1] + (p2[1] - p1[1])/2
+        range = []
+        x_range = np.linspace(p1[0], p2[0], split)
+        y_range = np.linspace(p1[1], p2[1], split)
+        range = [(x, y) for (x, y) in zip(x_range, y_range)]
+        selected_index = random.randint( int(split*0.45), int(split*0.55))
+        return range[selected_index]
+
     p1, p2, p1_opposite, p2_opposite = largest_edge(box)
-    # print("Largest: {}".format((p1, p2)))
-    # print("Opposite: {}".format((p1_opposite, p2_opposite)))
+    # log("Largest: {}".format((p1, p2)))
+    # log("Opposite: {}".format((p1_opposite, p2_opposite)))
 
     midpoint = get_midpoint(p1, p2)
     midpoint_opposite = get_midpoint(p1_opposite, p2_opposite)
-    # print("Midpoint: {}".format(midpoint))
-    # print("Midpoint Opposite: {}".format(midpoint_opposite))
+    # log("Midpoint: {}".format(midpoint))
+    # log("Midpoint Opposite: {}".format(midpoint_opposite))
 
     # extend the lines a little bit just to make sure they will
     # intersect with the edges of the polygon
@@ -103,11 +121,11 @@ def generate_parcel(nodes, ways, cycle, cycle_data):
     # ==== plot nodes from the perpendicular line to obb
     # ==== this is actually unnecessary, only doing it for the viz
     # n1 = building.new_node(*midpoint)
-    # _nodes[n1.id] = n1
+    # nodes[n1.id] = n1
     # n2 = building.new_node(*midpoint_opposite)
-    # _nodes[n2.id] = n2
+    # nodes[n2.id] = n2
     # w = building.new_way([n1.id, n2.id], {"highway":"primary"})
-    # _ways[w.id] = w
+    # ways[w.id] = w
     # ====
 
     p3 = midpoint
@@ -126,6 +144,20 @@ def generate_parcel(nodes, ways, cycle, cycle_data):
             intersected.append((intersect,i))
 
     if len(intersected) > 2:
+        log("Perpendicular line from OBB intersected with > 2 edges.")
+
+        created_ids = []
+        for pos, polygon_index in intersected:
+            n = building.new_node(*pos)
+            nodes[n.id] = n
+            created_ids.append(n.id)
+        w = building.new_way(created_ids, {"highway":"tertiary"})
+        ways[w.id] = w
+
+        colored_labels = helper.color_highways(ways,nodes)
+        colored_labels = None
+        plot(nodes, ways, tags=None, ways_labels=colored_labels)
+        #input("Press any key to continue...")
         return   # this polygon is a bit more complex
                  # than what we hoped for, so just skip it
 
@@ -148,11 +180,8 @@ def generate_parcel(nodes, ways, cycle, cycle_data):
     nodes[n2.id] = n2
     polygon.insert((polygon_index+2)%len(polygon), pos)
 
-    w = building.new_way([n1.id, n2.id], {"highway":"primary"})
+    w = building.new_way([n1.id, n2.id], {"highway":"tertiary"})
     ways[w.id] = w
-
-    #_nodes.update(nodes)
-    #_ways.update(ways)
 
     print("New Polygon: ")
     for point in polygon:
@@ -180,34 +209,30 @@ def generate_parcel(nodes, ways, cycle, cycle_data):
     subpolygon1 = []
     for n_id in subcycle1:
         print("{}: {}".format(n_id, nodes[n_id].location))
-        #subpolygon1.append(nodes[n_id].location)
 
     print("Subcycle2: ")
     subpolygon2 = []
     for n_id in subcycle2:
         print("{}: {}".format(n_id, nodes[n_id].location))
-        #subpolygon2.append(nodes[n_id].location)
-
 
     colored_labels = helper.color_highways(ways,nodes)
+    #colored_labels = None
     plot(nodes, ways, tags=None, ways_labels=colored_labels)
-
     #input("Press any key to continue...")
 
+    # generate parcel recursively in subcycle1
     points = []
     for n_id in subcycle1:
         points.append(nodes[n_id].location)
-    print("Subcycle Points for Area Calculation:")
-    for p in points:
-        print(p)
     area = helper.get_area(points)
     print("Area of Subycle1: {:.10f} (lower_a: {:.10f})".format(area, lower_a))
     if area > lower_a:
         print("Executing recursion Sub1...")
         generate_parcel(nodes, ways, subcycle1, cycle_data)
 
+    # generate parcel recursively in subcycle2
     points = []
-    for n_id in subcycle1:
+    for n_id in subcycle2:
         points.append(nodes[n_id].location)
     area = helper.get_area(points)
     print("Area of Subycle2: {:.10f} (lower_a: {:.10f})".format(area, lower_a))
@@ -219,7 +244,7 @@ def parseArgs(args):
 	usage = "usage: %prog [options]"
 	parser = optparse.OptionParser(usage=usage)
 	parser.add_option('-i', action="store", type="string", dest="filename",
-		help="OSM input file", default="_TX-To-TU.osm")
+		help="OSM input file", default="data/smaller_tsukuba.osm")
 	return parser.parse_args()
 
 def main():
@@ -230,17 +255,16 @@ def main():
     output = "output_{}".format(input)
     log("Reading OSM file '{}'...".format(input))
 
+    # we can obtain parcel data from one type of highway (e.g. residential)
+    # and then use this data to generate on another (e.g. primary, secondary)
     obtain_data_from = ["residential","unclassified"]
     generate_on = ["trunk","primary","secondary","tertiary"]
+    #generate_on = ["residential","unclassified"]
 
     nodes, ways = handler.extract_data(input)
     log("Data read sucessfully.")
     log("Total nodes: {}".format(len(nodes.values())))
     log("Total ways: {}".format(len(ways.values())))
-
-    min_lat, min_lon, max_lat, max_lon = handler.get_bounds(nodes.values())
-    matrix, lon_range, lat_range = helper.split_into_matrix(min_lat,
-                                            min_lon, max_lat, max_lon, nodes)
 
     # preprocess nodes, add some properties to them
     helper.set_node_type(ways, nodes)
@@ -256,6 +280,7 @@ def main():
 
     _output = "_temp.osm"
     handler.write_data(_output, _nodes.values(), _ways.values())
+    log("Obtaining 1st round of cycles from: {}".format(tags))
     _cycles = helper.get_cycles(_output)
     handler.delete_file(_output)
     total_cycles = len(_cycles)
@@ -275,6 +300,7 @@ def main():
 
     _output = "_temp.osm"
     handler.write_data(_output, nodes.values(), ways.values())
+    log("Obtaining 2nd round of cycles from: {}".format(tags))
     cycles = helper.get_cycles(_output)
     handler.delete_file(_output)
 
@@ -285,6 +311,8 @@ def main():
     cycles = helper.remove_nonempty_cycles(nodes, cycles, matrix,
                                                     lon_range, lat_range)
     print("Total empty cycles to generate on: {}".format(len(cycles)))
+
+    plot(nodes, ways)
 
     for cycle in cycles:
        generate_parcel(nodes, ways, cycle, cycle_data)

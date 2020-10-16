@@ -1,4 +1,4 @@
-from Map import *
+from lib.Map import *
 import osmium
 import os
 
@@ -17,6 +17,7 @@ def write_data(filename, nodes, ways):
     writer = osmium.SimpleWriter(filename)
     for n in nodes: writer.add_node(n)
     for w in ways:  writer.add_way(w)
+    writer.close()
 
     min_lat, min_lon, max_lat, max_lon = get_bounds(nodes)
     insert_bounds(filename, min_lat, min_lon, max_lat, max_lon)

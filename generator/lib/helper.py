@@ -2,17 +2,47 @@ from area import area
 import numpy as np
 from bisect import bisect
 from lib.logger import log
-import trigonometry as trig
-import handler
+import lib.trigonometry as trig
+import lib.handler as handler
 import osmnx as ox
 import networkx as nx
 
 def get_cycles(input_file):
+    # the cycle basis does not give all the chordless cycles
+    # but getting all the cycles from cycle basis and filtering the ones
+    # with nodes inside is quite fast
     G = ox.graph.graph_from_xml(input_file, simplify=False, retain_all=True)
     H = nx.Graph(G) # make a simple undirected graph from G
 
     cycles = nx.cycles.cycle_basis(H) # I think a cycle basis should get all the neighborhoods, except
                                       # we'll need to filter the cycles that are too small.
+    return cycles
+
+def get_cycles_minimum(input_file):
+    # it seems I can get all the chordless cycles with this approach
+    # whoever, it is extremely slow, took about 11 minutes to get cycles
+    # from residential/unclassified streets of "smaller_tsukuba.osm"
+    G = ox.graph.graph_from_xml(input_file, simplify=False, retain_all=True)
+    H = nx.Graph(G) # make a simple undirected graph from G
+
+    cycles = nx.cycles.minimum_cycle_basis(H) # I think a cycle basis should get all the neighborhoods, except
+                                      # we'll need to filter the cycles that are too small.
+
+    def order_cycles(H, cycle):
+
+        for i in range(len(cycle)-1):
+            for j in range(i+1, len(cycle)):
+                if H.has_edge(cycle[i], cycle[j]):
+                    temp = cycle[i+1]
+                    cycle[i+1] = cycle[j]
+                    cycle[j] = temp
+                    break
+
+    for c in cycles:
+        log("Ordering cycle...")
+        order_cycles(H, c)
+    log("Ordering finished.")
+
     return cycles
 
 def get_area(points):

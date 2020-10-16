@@ -1,12 +1,12 @@
 import os, sys
-import handler
+import lib.handler as handler
 import optparse
 import numpy as np
-import trigonometry as trig
+import lib.trigonometry as trig
 import matplotlib.pyplot as plt
 import logging
 import math
-import helper
+import lib.helper as helper
 import building
 from lib.logger import elapsed, log
 from lib.plotter import plot
@@ -51,7 +51,7 @@ def parseArgs(args):
 	usage = "usage: %prog [options]"
 	parser = optparse.OptionParser(usage=usage)
 	parser.add_option('-i', action="store", type="string", dest="filename",
-		help="OSM input file", default="_TX-To-TU.osm")
+		help="OSM input file", default="data/smaller_tsukuba.osm")
 	return parser.parse_args()
 
 def main():
@@ -95,11 +95,13 @@ def main():
     cycles = helper.get_cycles(input)
     total_cycles = len(cycles)
 
+    # fitler only highway cycles
     cycles = helper.filter_cycles_by_type(nodes, cycles, "highway")
     highway_cycles = len(cycles)
     log("{}/{} highway cycles were identified.".format(highway_cycles,
                                                     total_cycles))
 
+    # obtain data from cycles (esp. min_area, avg_area)
     min_area, max_area, avg_area, std_area = helper.get_cycles_data(nodes,
                                                                         cycles)
     cycle_data = {"min_area": min_area,
@@ -109,8 +111,10 @@ def main():
              "std_area": std_area}
     log(cycle_data)
 
+    # due to defective function, some cycles are not chordless
+    # so we filter these out
     cycles = helper.remove_nonempty_cycles(nodes, cycles, matrix,
-                                                    lon_range, lat_range)
+                                                   lon_range, lat_range)
 
     for cycle in cycles:
         #try:
@@ -123,7 +127,7 @@ def main():
 
     log("Total cycles: {}".format(total_cycles))
     log("Highway cycles: {}".format(highway_cycles))
-    log("Empty highway cycles: {}".format(len(cycles)))
+    log("Chordless highway cycles: {}".format(len(cycles)))
     log("{} buildings were generated in {} edges.".format(created, total))
 
     handler.write_data("{}_output.osm".format(input), nodes.values(),
