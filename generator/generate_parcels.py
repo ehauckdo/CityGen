@@ -35,7 +35,7 @@ def generate_parcel(nodes, ways, cycle, cycle_data):
             if multiplier < 0: raise Exception
         return lower_a
 
-    lower_a = get_lower(cycle_data["avg_area"],cycle_data["std_area"]) * 3
+    lower_a = get_lower(cycle_data["avg_area"],cycle_data["std_area"])
     upper_a = lower_a * 1.5
     _nodes, _ways = {}, {}
     log("\nLower area bound: {}\nUpper area bound: {}".format(lower_a, upper_a))
@@ -229,6 +229,11 @@ def generate_parcel(nodes, ways, cycle, cycle_data):
     if area > lower_a:
         print("Executing recursion Sub1...")
         generate_parcel(nodes, ways, subcycle1, cycle_data)
+    else:
+        # place building here
+        created_nodes, created_ways = building.generate_offset_polygon_iterative(points)
+        nodes.update(created_nodes)
+        ways.update(created_ways)
 
     # generate parcel recursively in subcycle2
     points = []
@@ -239,6 +244,10 @@ def generate_parcel(nodes, ways, cycle, cycle_data):
     if area > lower_a:
         print("Executing recursion Sub2...")
         generate_parcel(nodes, ways, subcycle2, cycle_data)
+    else:
+        created_nodes, created_ways = building.generate_offset_polygon_iterative(points)
+        nodes.update(created_nodes)
+        ways.update(created_ways)
 
 def parseArgs(args):
 	usage = "usage: %prog [options]"
@@ -262,6 +271,7 @@ def main():
     #generate_on = ["residential","unclassified"]
 
     nodes, ways = handler.extract_data(input)
+    helper.update_id_counter(nodes.values())
     log("Data read sucessfully.")
     log("Total nodes: {}".format(len(nodes.values())))
     log("Total ways: {}".format(len(ways.values())))

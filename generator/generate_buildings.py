@@ -63,6 +63,7 @@ def main():
     log("Reading OSM file '{}'...".format(input))
 
     nodes, ways = handler.extract_data(input)
+    helper.update_id_counter(nodes.values())
     log("Data read sucessfully.")
     log("Total nodes: {}".format(len(nodes.values())))
     log("Total ways: {}".format(len(ways.values())))

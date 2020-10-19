@@ -2,6 +2,7 @@ from area import area
 import numpy as np
 from bisect import bisect
 from lib.logger import log
+from lib import settings
 import lib.trigonometry as trig
 import lib.handler as handler
 import osmnx as ox
@@ -244,6 +245,11 @@ def filter_by_tag(nodes, ways, tags):
                         _nodes[n_id] = nodes[n_id]
 
     return _nodes, _ways
+
+def update_id_counter(nodes):
+    for n in nodes:
+        if n.id >= settings.id_counter:
+            settings.id_counter = n.id + 1
 
 index = 0
 colors = ["b","g","c","m","y"]
