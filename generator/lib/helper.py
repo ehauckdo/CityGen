@@ -19,6 +19,16 @@ def get_cycles(input_file):
                                       # we'll need to filter the cycles that are too small.
     return cycles
 
+def get_cycles_highway(input_file):
+    nodes, ways = handler.extract_data(input_file)
+    tags = {"highway":None}
+    _nodes, _ways = filter_by_tag(nodes, ways, tags)
+    _output = "_temp.osm"
+    handler.write_data(_output, _nodes.values(), _ways.values())
+    cycles = get_cycles(_output)
+    handler.delete_file(_output)
+    return cycles
+
 def get_cycles_minimum(input_file):
     # it seems I can get all the chordless cycles with this approach
     # whoever, it is extremely slow, took about 11 minutes to get cycles
@@ -169,7 +179,11 @@ def get_cycles_data(nodes, cycles):
         areas.append(area)
     return min(areas), max(areas), np.average(areas), np.std(areas)
 
-def remove_nonempty_cycles(nodes, cycles, matrix, lon_range, lat_range):
+def remove_nonempty_cycles(nodes, cycles):
+    min_lat, min_lon, max_lat, max_lon = handler.get_bounds(nodes.values())
+    matrix, lon_range, lat_range = split_into_matrix(min_lat,
+                                            min_lon, max_lat, max_lon, nodes)
+
     empty_cycles = []
     for cycle in cycles:
         log("Nodes in Cycle:", "DEBUG")

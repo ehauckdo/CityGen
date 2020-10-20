@@ -262,6 +262,7 @@ def main():
     opt, args = parseArgs(sys.argv[1:])
     input = opt.filename
     output = "output_{}".format(input)
+    print(input)
     log("Reading OSM file '{}'...".format(input))
 
     # we can obtain parcel data from one type of highway (e.g. residential)
@@ -314,12 +315,7 @@ def main():
     cycles = helper.get_cycles(_output)
     handler.delete_file(_output)
 
-    min_lat, min_lon, max_lat, max_lon = handler.get_bounds(nodes.values())
-    matrix, lon_range, lat_range = helper.split_into_matrix(min_lat,
-                                            min_lon, max_lat, max_lon, nodes)
-
-    cycles = helper.remove_nonempty_cycles(nodes, cycles, matrix,
-                                                    lon_range, lat_range)
+    cycles = helper.remove_nonempty_cycles(nodes, cycles)
     print("Total empty cycles to generate on: {}".format(len(cycles)))
 
     plot(nodes, ways)

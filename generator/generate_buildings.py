@@ -68,10 +68,6 @@ def main():
     log("Total nodes: {}".format(len(nodes.values())))
     log("Total ways: {}".format(len(ways.values())))
 
-    min_lat, min_lon, max_lat, max_lon = handler.get_bounds(nodes.values())
-    matrix, lon_range, lat_range = helper.split_into_matrix(min_lat,
-                                            min_lon, max_lat, max_lon, nodes)
-
     number_edges, min_dist, std_min, max_dist, std_max = get_buildings_data(
                                                                    ways, nodes)
     edge_data = {"number_edges": number_edges,
@@ -114,8 +110,7 @@ def main():
 
     # due to defective function, some cycles are not chordless
     # so we filter these out
-    cycles = helper.remove_nonempty_cycles(nodes, cycles, matrix,
-                                                   lon_range, lat_range)
+    cycles = helper.remove_nonempty_cycles(nodes, cycles)
 
     for cycle in cycles:
         #try:
