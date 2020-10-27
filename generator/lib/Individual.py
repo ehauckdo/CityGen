@@ -2,9 +2,9 @@ import lib.evolution as evo
 
 class Individual():
 
-    def __init__(self, chromosome=[0]):
+    def __init__(self, chromosome):
         self.chromosome = chromosome
-        self.fitness = evo.evaluate(self)
+        self.fitness = -1
 
     def __repr__(self):
-        return "{:02d}, {}".format(self.fitness, self.chromosome)
+        return "{:02f}, {}".format(self.fitness, self.chromosome)

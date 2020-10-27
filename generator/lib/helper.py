@@ -7,6 +7,18 @@ import lib.trigonometry as trig
 import lib.handler as handler
 import osmnx as ox
 import networkx as nx
+import pickle
+
+def save(data, filename):
+    pickle.dump(data, open("{}".format(filename), "wb"))
+
+def load(filename):
+    try:
+        data = pickle.load(open("{}".format(filename), "rb"))
+        return data
+    except:
+        log("FAILED load file {}".format(filename))
+        return None
 
 def get_cycles(input_file):
     # the cycle basis does not give all the chordless cycles
@@ -192,7 +204,8 @@ def remove_nonempty_cycles(nodes, cycles):
 
         min_lat, min_lon, max_lat, max_lon = handler.get_bounds(
                                                     [nodes[x] for x in cycle])
-        log("Bounds of cycle: {}".format((min_lat, min_lon, max_lat, max_lon)))
+        log("Bounds of cycle: {}".format((min_lat, min_lon, max_lat, max_lon)),
+                                                                    "DEBUG")
         x_min, y_min, x_max, y_max = nodes_in_area(min_lat, min_lon,
                                      max_lat, max_lon, lat_range, lon_range)
         detected_nodes = {}
@@ -210,23 +223,102 @@ def remove_nonempty_cycles(nodes, cycles):
         for n_id in cycle:
             cycle_polygon.append(nodes[n_id].location)
 
-        # we use set(cycle) in case the cycle list has the same node at
-        # the beginning and end of the list
+        # remove cycle nodes from the detected nodes dict
+        # obs: we use set(cycle) in case the cycle list has the same node at
+        # the beginning and end of the list, so we only del it once
         for n_id in set(cycle):
-           log("Attempting to delete {} from detected_nodes".format(n_id)
-                    , "DEBUG")
            del detected_nodes[n_id]
 
-        log("Cycle polygon: {}".format(cycle_polygon))
+        log("Cycle polygon: {}".format(cycle_polygon), "DEBUG")
         for id, n in detected_nodes.items():
            lon, lat = n.location
            if trig.point_inside_polygon(lon, lat, cycle_polygon):
-               log("Node inside cycle detected! Coord: {}".format((lon,lat)))
+               log("Node inside cycle detected! Coord: {}".format((lon,lat)),
+                                                                        "DEBUG")
                break
         else:
             empty_cycles.append(cycle)
 
     return empty_cycles
+
+def building_density(nodes,ways,cycle):
+    # print("Calculating building density...")
+    # print("Cycle nodes: {}".format(cycle))
+    matrix, lon_range, lat_range = split_into_matrix(*handler.get_bounds(
+                                                        nodes.values()),
+                                                        nodes)
+
+    min_lat, min_lon, max_lat, max_lon = handler.get_bounds(
+                                                [nodes[x] for x in cycle], ex=0)
+    x_min, y_min, x_max, y_max = nodes_in_area(min_lat, min_lon,
+                                 max_lat, max_lon, lat_range, lon_range)
+    # print("Bounding rectangle of cycle: {}".format((min_lon, max_lon,
+    #                                                         min_lat, max_lat)))
+
+    detected_nodes = {}
+    for x in range(x_min, x_max+1):
+        for y in range(y_min, y_max+1):
+            node_ids_list = matrix[x][y]
+            for n_id in node_ids_list:
+                detected_nodes[n_id] = nodes[n_id]
+
+    # remove cycle nodes from the detected nodes dict
+    # obs: we use set(cycle) in case the cycle list has the same node at
+    # the beginning and end of the list, so we only del it once
+    for n_id in set(cycle):
+       del detected_nodes[n_id]
+
+    # print("Total nodes detected in the area: ")
+    # print(detected_nodes.keys())
+
+    cycle_polygon = []
+    for n_id in cycle:
+        cycle_polygon.append(nodes[n_id].location)
+
+    inner_nodes = {}
+    for id, n in detected_nodes.items():
+       lon, lat = n.location
+       if trig.point_inside_polygon(lon, lat, cycle_polygon):
+           inner_nodes[id] = n
+
+    # print("Total nodes effectively inside cycle: ")
+    # print(inner_nodes.keys())
+
+    detected_ways = {}
+
+    for w_id, way in ways.items():
+        for n_id in inner_nodes.keys():
+            if n_id in way.nodes:
+                detected_ways[w_id] = way
+                break
+
+    import pprint
+    # print("Total detected ways inside cycle:")
+    pp = pprint.PrettyPrinter(indent=4)
+    pp.pprint([(x.id, x.tags) for x in detected_ways.values()])
+
+    building_ways = {}
+    for w_id, way in detected_ways.items():
+        if "building" in way.tags:
+            building_ways[w_id] = way
+
+    # print("Total building ways inside cycle: {}".format(len(building_ways)))
+    # if len(inner_nodes) > 0:
+    #     import sys
+    #     print("Found inner nodes in the previous cycle: ")
+    #     sys.exit()
+
+    return building_ways
+
+def centroid(vertexes):
+    # source: https://progr.interplanety.org/en/python-how-to-find-the-
+    #         polygon-center-coordinates/
+     _x_list = [vertex [0] for vertex in vertexes]
+     _y_list = [vertex [1] for vertex in vertexes]
+     _len = len(vertexes)
+     _x = sum(_x_list) / _len
+     _y = sum(_y_list) / _len
+     return(_x, _y)
 
 def filter_cycles_by_type(nodes, cycles, wanted_type):
     # remove cycles containing nodes of an assigned type other than wanted_type
