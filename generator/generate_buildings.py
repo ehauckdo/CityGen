@@ -3,12 +3,10 @@ import lib.handler as handler
 import optparse
 import numpy as np
 import lib.trigonometry as trig
-import matplotlib.pyplot as plt
 import logging
-import math
 import lib.helper as helper
 import building
-from lib.logger import elapsed, log
+from lib.logger import log
 from lib.plotter import plot
 
 total = 0
@@ -47,7 +45,7 @@ def get_buildings_data(ways, nodes):
         std_min, std_max = 0, 0
     return number_edges, avg_min, std_min, avg_max, std_max
 
-def parseArgs(args):
+def parse_args(args):
 	usage = "usage: %prog [options]"
 	parser = optparse.OptionParser(usage=usage)
 	parser.add_option('-i', action="store", type="string", dest="filename",
@@ -57,7 +55,7 @@ def parseArgs(args):
 def main():
 
     os.system('clear')
-    opt, args = parseArgs(sys.argv[1:])
+    opt, args = parse_args(sys.argv[1:])
     input = opt.filename
     output = "output_{}".format(input)
     log("Reading OSM file '{}'...".format(input))

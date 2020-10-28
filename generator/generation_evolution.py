@@ -9,12 +9,11 @@ import lib.handler as handler
 import lib.plotter as plotter
 import lib.trigonometry as trig
 import pprint
-from generate_parcels import generate_parcel2
+from parcel import generate_parcel_density
 
 logging.basicConfig(level=logging.INFO, filemode='w', filename='_main.log')
 
-
-def parseArgs(args):
+def parse_args(args):
 	usage = "usage: %prog [options]"
 	parser = optparse.OptionParser(usage=usage)
 	parser.add_option('-i', action="store", type="string", dest="filename",
@@ -24,7 +23,7 @@ def parseArgs(args):
 def main():
 
     os.system('clear')
-    opt, args = parseArgs(sys.argv[1:])
+    opt, args = parse_args(sys.argv[1:])
     input = opt.filename
     output = "{}_output.osm".format(input)
     log("Reading OSM file '{}'...".format(input))
@@ -45,32 +44,34 @@ def main():
     log("All road cycles identified: {}".format(len(road_cycles)))
 
     _output = "{}_roads_data".format(input)
-    empty_cycles = helper.load(_output)
-    if empty_cycles == None:
+    usable_cycles = helper.load(_output)
+    if usable_cycles == None:
         log("Fetching empty cycles...")
-        empty_cycles = helper.remove_nonempty_cycles(road_nodes, road_cycles)
-        helper.save(empty_cycles, _output)
+        usable_cycles = helper.remove_nonempty_cycles(road_nodes, road_cycles)
+        helper.save(usable_cycles, _output)
     else:
         log("Loaded cycles data")
 
-    log("Empty Cycles: {}".format(len(empty_cycles)))
+    log("Usable Cycles: {}".format(len(usable_cycles)))
+
+    #
+    # Parse data into a dict structure
+    #
+    cycles = {}
+    for i in range(len(usable_cycles)):
+        cycles[i] = {"n_ids":usable_cycles[i]}
 
     #
     # Calculate centroid of each cycle
     #
-    cycles = {}
     log("Calculating centroid for each cycle")
-    for i in range(len(empty_cycles)):
-        points = []
-        for n_id in empty_cycles[i]:
-            points.append(road_nodes[n_id].location)
-        cycles[i] = {
-                    "n_ids":empty_cycles[i],
-                    "centroid":helper.centroid(points)
-                     }
+    for i in cycles:
+        centroid = helper.centroid([road_nodes[n_id].location for n_id in
+                                                        cycles[i]["n_ids"]])
+        cycles[i]["centroid"] = centroid
 
     #
-    # Get 3 closest neighbour cycles for each cycle
+    # Set neighbors for each cycle by selecting the 3 closest cycles from it
     #
     # log("Calculating nearest neighbours for each cycle.")
     # for i in range(len(cycles)):
@@ -86,11 +87,12 @@ def main():
     #     # pp.pprint(cycles[i])
 
     #
-    # Calculate MST instead of 3 closest neighbors
+    # Set neighbors for each cycle by calculating a MST connecting all cycles
     #
     log("Calculating neighbors with MST")
     _output = "{}_neighbor_data".format(input)
     neighbor_values = helper.load(_output)
+
     if neighbor_values == None:
         neighbor_values = {}
         for i in cycles:
@@ -106,11 +108,8 @@ def main():
                        distances.append((dist,i,j))
             distances = sorted(distances)
             dist, i, j = distances.pop(0)
-            #cycles[i]["neighbors"].append(j)
-            #cycles[j]["neighbors"].append(i)
             neighbor_values[i].append(j)
             neighbor_values[j].append(i)
-            #print("Appending in i {}, j {}".format(i, j))
             added.append(j)
         helper.save(neighbor_values, _output)
 
@@ -139,7 +138,8 @@ def main():
     max_density = 20 if max_density == 0 else max_density
 
     #
-    # Save indexes of cycles that we want to generate on (chrom_idx)
+    # Save indexes of cycles that have no buildings on them. We will operate
+    # on these cycles and leave the ones with buildings alone.
     #
     chrom_idx, neigh_idx = [], []
     for idx in cycles:
@@ -211,7 +211,7 @@ def main():
     #     print("Cycle: {}".format(cycle))
     #     density = cycles[c]["density"]
     #     density = density - 1 if density > 0 else 0
-    #     generate_parcel2(nodes, ways, cycle, density)
+    #     generate_parcel_density(nodes, ways, cycle, density)
 
     #
     # Initialize a pop for cycles
@@ -249,7 +249,7 @@ def main():
         #print("Cycle: {}".format(cycle))
         density = best_ind.chromosome[c]
         density = density - 1 if density > 0 else 0
-        generate_parcel2(nodes, ways, cycle, density)
+        generate_parcel_density(nodes, ways, cycle, density)
 
 
     #plotter.plot(nodes, ways)
