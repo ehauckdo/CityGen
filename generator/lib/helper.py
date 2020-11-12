@@ -8,6 +8,7 @@ import lib.handler as handler
 import osmnx as ox
 import networkx as nx
 import pickle
+import lib.handler as handler
 
 def save(data, filename):
     pickle.dump(data, open("{}".format(filename), "wb"))
@@ -19,6 +20,31 @@ def load(filename):
     except:
         log("FAILED load file {}".format(filename))
         return None
+
+def remove_out_of_bounds(filename, min_lon, min_lat, max_lon, max_lat):
+    nodes, ways = handler.extract_data(filename)
+    print("nodes: {}, ways: {}".format(len(nodes), len(ways)))
+    delete_nodes = []
+    for n_id, n in nodes.items():
+        lon, lat = n.location
+        if lon < min_lon or lon > max_lon or lat < min_lat or lat > max_lat:
+            delete_nodes.append(n_id)
+
+    for n_id in delete_nodes:
+        del nodes[n_id]
+        for w_id, w in ways.items():
+            if n_id in w.nodes:
+                w.nodes.remove(n_id)
+
+    delete_ways = []
+    for w_id, w in ways.items():
+        if len(w.nodes) == 0:
+            delete_ways.append(w_id)
+    for w in delete_ways:
+        del ways[w]
+
+    print("nodes: {}, ways: {}".format(len(nodes), len(ways)))
+    handler.write_data(filename, nodes.values(), ways.values(), 0.00002)
 
 def get_cycles(input_file):
     # the cycle basis does not give all the chordless cycles
@@ -365,3 +391,43 @@ def next_color():
     if index >= len(colors):
         index = 0
     return colors[index]
+
+def get_obb_data(nodes, cycle):
+    import lib.obb as obb
+    polygon = []
+    for n_id in cycle:
+        polygon.append(nodes[n_id].location)
+
+    # returns 2D obb, uses convex hulls
+    # yields decent results for symmetric shapes such as rectangles/squares
+    box = obb.minimum_bounding_rectangle(np.array(polygon))
+
+    def largest_edge(polygon):
+        if len(polygon) < 2: return None
+        largest = (0, None)
+        p_size = len(polygon)
+        for i in range(len(polygon)):
+            p1 = polygon[i]
+            p2 = polygon[(i+1)%p_size]
+            dist = trig.dist(p1[0], p1[1], p2[0], p2[1])
+            #print("Length {}: between points {}".format(dist, (p1,p2)))
+            if dist > largest[0]:
+                largest = (dist, (p1, p2), (polygon[(i+2)%p_size], polygon[(i+1+2)%p_size]))
+        return largest[0]
+
+    def shortest_edge(polygon):
+        if len(polygon) < 2: return None
+        shortest = (trig.dist(*polygon[0], *polygon[1]), None)
+        p_size = len(polygon)
+        for i in range(len(polygon)):
+            p1 = polygon[i]
+            p2 = polygon[(i+1)%p_size]
+            dist = trig.dist(p1[0], p1[1], p2[0], p2[1])
+            if dist < shortest[0]:
+                shortest = (dist, (p1, p2), (polygon[(i+2)%p_size], polygon[(i+1+2)%p_size]))
+        return shortest[0]
+
+    largest = largest_edge(box)
+    shortest = shortest_edge(box)
+
+    return largest, shortest

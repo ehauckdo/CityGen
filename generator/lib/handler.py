@@ -12,14 +12,14 @@ def extract_data(input):
 # params: a path/name for the file, a list of nodes and list of ways
 # writes the osm XML file for the list of nodes and ways
 # returns: None
-def write_data(filename, nodes, ways):
+def write_data(filename, nodes, ways, ex=0.002):
     delete_file(filename)
     writer = osmium.SimpleWriter(filename)
     for n in nodes: writer.add_node(n)
     for w in ways:  writer.add_way(w)
     writer.close()
 
-    min_lat, min_lon, max_lat, max_lon = get_bounds(nodes)
+    min_lat, min_lon, max_lat, max_lon = get_bounds(nodes, ex)
     insert_bounds(filename, min_lat, min_lon, max_lat, max_lon)
 
 def delete_file(filename):

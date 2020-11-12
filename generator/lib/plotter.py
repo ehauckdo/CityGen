@@ -1,7 +1,12 @@
 import networkx as nx
+import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from lib.logger import log
+
+matplotlib.use('TkAgg') # this is required for mac when matplotlib is used in
+                        # conjuction with tensorflow, otherwise a cryptic error
+                        # is thrown
 
 def plot(nodes, ways, tags=None, ways_labels=None):
 

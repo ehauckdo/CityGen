@@ -5,11 +5,10 @@ import lib.trigonometry as trig
 import numpy as np
 from lib.logger import log
 
-def generate_parcel_density(nodes, ways, cycle, partitions_left):
+def generate_parcel_density(nodes, ways, cycle, partitions_left,
+                            min_obb_ratio=0.25, min_area=3000):
 
-    polygon = []
-    for n_id in cycle:
-        polygon.append(nodes[n_id].location)
+    polygon = [nodes[n_id].location for n_id in cycle]
 
     # returns 2D obb, uses convex hulls
     # yields decent results for symmetric shapes such as rectangles/squares
@@ -18,7 +17,7 @@ def generate_parcel_density(nodes, ways, cycle, partitions_left):
 
     def largest_edge(polygon):
         if len(polygon) < 2: return None
-        largest = (0, None)
+        largest = (0, (None, None), (None,None))
         p_size = len(polygon)
         for i in range(len(polygon)):
             p1 = polygon[i]
@@ -27,14 +26,30 @@ def generate_parcel_density(nodes, ways, cycle, partitions_left):
             #print("Length {}: between points {}".format(dist, (p1,p2)))
             if dist > largest[0]:
                 largest = (dist, (p1, p2), (polygon[(i+2)%p_size], polygon[(i+1+2)%p_size]))
-        return *largest[1], *largest[2]
+        return largest[0], *largest[1], *largest[2]
+
+    # def shortest_edge(polygon):
+    #     if len(polygon) < 2: return None
+    #     shortest = (trig.dist(*polygon[0], *polygon[1]), (None, None), (None,None))
+    #     p_size = len(polygon)
+    #     for i in range(len(polygon)):
+    #         p1 = polygon[i]
+    #         p2 = polygon[(i+1)%p_size]
+    #         dist = trig.dist(p1[0], p1[1], p2[0], p2[1])
+    #         if dist < shortest[0]:
+    #             shortest = (dist, (p1, p2), (polygon[(i+2)%p_size], polygon[(i+1+2)%p_size]))
+    #     return shortest[0], *shortest[1], *shortest[2]
 
     def get_midpoint(p1, p2):
         x = p1[0] + (p2[0] - p1[0])/2
         y = p1[1] + (p2[1] - p1[1])/2
         return x, y
 
-    p1, p2, p1_opposite, p2_opposite = largest_edge(box)
+    dist_larger, p1, p2, p1_opposite, p2_opposite = largest_edge(box)
+    # dist_shorter, _, _, _, _ = shortest_edge(box)
+    #
+    # if dist_shorter/dist_larger < 0.25:
+    #     return
 
     midpoint = get_midpoint(p1, p2)
     midpoint_opposite = get_midpoint(p1_opposite, p2_opposite)
@@ -59,19 +74,6 @@ def generate_parcel_density(nodes, ways, cycle, partitions_left):
 
     if len(intersected) > 2:
         log("Perpendicular line from OBB intersected with > 2 edges.", "DEBUG")
-
-        created_ids = []
-        for pos, polygon_index in intersected:
-            n = building.new_node(*pos)
-            nodes[n.id] = n
-            created_ids.append(n.id)
-        w = building.new_way(created_ids, {"highway":"residential"})
-        ways[w.id] = w
-
-        colored_labels = helper.color_highways(ways,nodes)
-        colored_labels = None
-        #plot(nodes, ways, tags=None, ways_labels=colored_labels)
-        #input("Press any key to continue...")
         return   # this polygon is a bit more complex
                  # than what we hoped for, so just skip it
 
@@ -84,15 +86,30 @@ def generate_parcel_density(nodes, ways, cycle, partitions_left):
 
     # get the two edges that intersect with the line dividing the OBB
     # and create two nodes and a way connecting them
-    pos, polygon_index = intersected[0]
-    n1 = building.new_node(*pos)
-    nodes[n1.id] = n1
-    polygon.insert((polygon_index+1)%len(polygon), pos)
+    pos1, polygon_idx1 = intersected[0]
+    pos2, polygon_idx2 = intersected[1]
 
-    pos, polygon_index = intersected[1]
-    n2 = building.new_node(*pos)
+    def update_way(ways, n1, n2, n_new):
+        # when a new street is created between two other streets,
+        # we need to add the newly created nodes to the original street ways
+        for w_idx, w in ways.items():
+            for i in range(len(w.nodes)):
+                if w.nodes[i] == n1 or w.nodes[i] == n2:
+                    j = (i+1)%len(w.nodes)
+                    if w.nodes[j] == n1 or w.nodes[j] == n2:
+                        w.nodes.insert(j, n_new)
+                        break
+
+    n1 = building.new_node(*pos1)
+    nodes[n1.id] = n1
+    update_way(ways, cycle[polygon_idx1], cycle[(polygon_idx1+1)%p_size], n1.id)
+
+    n2 = building.new_node(*pos2)
     nodes[n2.id] = n2
-    polygon.insert((polygon_index+2)%len(polygon), pos)
+    update_way(ways, cycle[polygon_idx2], cycle[(polygon_idx2+1)%p_size], n2.id)
+
+    polygon.insert((polygon_idx1+1)%len(polygon), pos1)
+    polygon.insert((polygon_idx2+2)%len(polygon), pos2)
 
     w = building.new_way([n1.id, n2.id], {"highway":"residential"})
     ways[w.id] = w
@@ -126,8 +143,7 @@ def generate_parcel_density(nodes, ways, cycle, partitions_left):
         generate_parcel_density(nodes, ways, subcycle1, partitions_left)
     else:
         # place building here
-        points = []
-        for n_id in subcycle1: points.append(nodes[n_id].location)
+        points = [nodes[n_id].location for n_id in subcycle1]
         created_nodes, created_ways = building.generate_offset_polygon_iterative(points)
         nodes.update(created_nodes)
         ways.update(created_ways)
@@ -139,8 +155,7 @@ def generate_parcel_density(nodes, ways, cycle, partitions_left):
         generate_parcel_density(nodes, ways, subcycle2, partitions_left)
     else:
          # place building here
-        points = []
-        for n_id in subcycle2: points.append(nodes[n_id].location)
+        points = [nodes[n_id].location for n_id in subcycle2]
         created_nodes, created_ways = building.generate_offset_polygon_iterative(points)
         nodes.update(created_nodes)
         ways.update(created_ways)
@@ -160,14 +175,10 @@ def generate_parcel_minarea(nodes, ways, cycle, cycle_data):
     upper_a = lower_a * 1.5
     _nodes, _ways = {}, {}
     log("\nLower area bound: {}\nUpper area bound: {}".format(lower_a, upper_a))
-    points = [n.location for n_id, n in nodes.items() if n_id in cycle]
+    points = [nodes[n_id].location for n_id in cycle]
     area = helper.get_area(points)
 
-    print("Processing cycle: ")
-    polygon = []
-    for n_id in cycle:
-        print("id {}: \t{}".format(n_id, nodes[n_id].location))
-        polygon.append(nodes[n_id].location)
+    polygon = [nodes[n_id].location for n_id in cycle]
     log("\nCurrent cycle area: {:.10f}".format(area))
 
     # # returns 2D obb, uses the PCA/covariance/eigenvector method
@@ -340,9 +351,7 @@ def generate_parcel_minarea(nodes, ways, cycle, cycle_data):
     #input("Press any key to continue...")
 
     # generate parcel recursively in subcycle1
-    points = []
-    for n_id in subcycle1:
-        points.append(nodes[n_id].location)
+    points = [nodes[n_id].location for n_id in subcycle1]
     area = helper.get_area(points)
     print("Area of Subycle1: {:.10f} (lower_a: {:.10f})".format(area, lower_a))
     if area > lower_a:
@@ -355,9 +364,7 @@ def generate_parcel_minarea(nodes, ways, cycle, cycle_data):
         ways.update(created_ways)
 
     # generate parcel recursively in subcycle2
-    points = []
-    for n_id in subcycle2:
-        points.append(nodes[n_id].location)
+    points = [nodes[n_id].location for n_id in subcycle2]
     area = helper.get_area(points)
     print("Area of Subycle2: {:.10f} (lower_a: {:.10f})".format(area, lower_a))
     if area > lower_a:

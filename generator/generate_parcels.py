@@ -36,6 +36,7 @@ def main():
     #generate_on = ["residential","unclassified"]
 
     nodes, ways = handler.extract_data(input)
+    original_nodes, original_ways = nodes, ways
     helper.update_id_counter(nodes.values())
     log("Data read sucessfully.")
     log("Total nodes: {}".format(len(nodes.values())))
@@ -79,10 +80,22 @@ def main():
     cycles = helper.get_cycles(_output)
     handler.delete_file(_output)
 
-    cycles = helper.remove_nonempty_cycles(nodes, cycles)
+    cycles = helper.remove_nonempty_cycles(original_nodes, cycles)
     print("Total empty cycles to generate on: {}".format(len(cycles)))
 
     plot(nodes, ways)
+
+    ##### Filter cycles that do not have minimum area or ratio
+    _cycles = []
+    for c in cycles:
+        largest, shortest = helper.get_obb_data(nodes, c)
+        ratio = shortest/largest
+        area = helper.get_area([nodes[n_id].location for n_id in c])
+        #print("Area: {:0.2f}, Ratio: {:0.2f}, Largest: {}, Shortest: {}".format(area, shortest/largest, largest, shortest))
+        #if area < 3000 or ratio < 0.25: continue
+        _cycles.append(c)
+    cycles = _cycles
+
 
     for cycle in cycles:
        #generate_parcel_minarea(nodes, ways, cycle, cycle_data)
