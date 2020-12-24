@@ -146,12 +146,12 @@ def color_ways(ways, nodes, ways_colors, nodes_colors, default="black"):
             if tag in way.tags:
                 way.color = color
                 for n_id in way.nodes:
-                    nodes[n_id].color = nodes_colors[tag]
+                    nodes[n_id].color = "black"#nodes_colors[tag]
                 break
         else:
             way.color = default
             for n_id in way.nodes:
-                nodes[n_id].color = default
+                nodes[n_id].color = "black"#default
 
 def color_highways(ways, nodes):
     import matplotlib.pyplot as plt
@@ -166,7 +166,7 @@ def color_highways(ways, nodes):
             if "highway" in way.tags:
                 tag = way.tags["highway"]
                 if tag not in tags:
-                    tags[tag] = next(pltcolors)
+                    tags[tag] = "black"#next(pltcolors)
                 way.color = tags[tag]
         return tags
 
@@ -431,3 +431,9 @@ def get_obb_data(nodes, cycle):
     shortest = shortest_edge(box)
 
     return largest, shortest
+
+def create_folder(foldername):
+    try:
+        os.mkdir(foldername)
+    except FileExistsError:
+        pass

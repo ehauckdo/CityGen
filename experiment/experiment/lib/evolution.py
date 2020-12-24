@@ -270,7 +270,7 @@ def initialize_pop_ME(chrom, chrom_idx, neigh_idx, areas, max_buildings, pop_siz
         # gives a very rough approximation of the highest error
         global highest_e
         archive = []
-        for i in range(100000):
+        for i in range(10000):
             new_chrom = [g for g in chrom]
             max_parcel = int(max_buildings/len(chrom))
             genes = [int(random.random()*max_parcel) for x in range(len(chrom))]

@@ -431,3 +431,9 @@ def get_obb_data(nodes, cycle):
     shortest = shortest_edge(box)
 
     return largest, shortest
+
+def create_folder(foldername):
+    try:
+        os.mkdir(foldername)
+    except FileExistsError:
+        pass

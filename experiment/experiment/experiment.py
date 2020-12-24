@@ -15,11 +15,6 @@ logging.basicConfig(level=logging.INFO, filemode='w', filename='_main.log')
 # supress tensorflow warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-def create_folder(foldername):
-    try:
-        os.mkdir(foldername)
-    except FileExistsError:
-        pass
 def set_colors(nodes, ways):
     # this is just for helping in plotting
     # no practical use during execution
@@ -156,7 +151,7 @@ def main():
     input = opt.filename
     model = opt.model
     output = opt.output_folder
-    create_folder(output)
+    helper.create_folder(output)
 
     ###########################
     # Loading model data

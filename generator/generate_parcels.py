@@ -45,8 +45,8 @@ def main():
     # preprocess nodes, add some properties to them
     helper.set_node_type(ways, nodes)
     helper.color_nodes(nodes.values(), "black")
-    ways_colors = nodes_colors = {"building":"red", "highway":"black"}
-    helper.color_ways(ways, nodes, ways_colors, nodes_colors, default="black")
+    ways_colors = nodes_colors = {"building":"black", "highway":"black"}
+    #helper.color_ways(ways, nodes, ways_colors, nodes_colors, default="black")
     colored_labels = helper.color_highways(ways, nodes)
     log("Nodes preprocessed sucessfully.")
 
@@ -80,7 +80,7 @@ def main():
     cycles = helper.get_cycles(_output)
     handler.delete_file(_output)
 
-    cycles = helper.remove_nonempty_cycles(original_nodes, cycles)
+    #cycles = helper.remove_nonempty_cycles(original_nodes, cycles)
     print("Total empty cycles to generate on: {}".format(len(cycles)))
 
     plot(nodes, ways)
@@ -98,8 +98,8 @@ def main():
 
 
     for cycle in cycles:
-       #generate_parcel_minarea(nodes, ways, cycle, cycle_data)
-       generate_parcel_density(nodes, ways, cycle, 7)
+       generate_parcel_minarea(nodes, ways, cycle, cycle_data)
+       #generate_parcel_density(nodes, ways, cycle, 7)
        print("")
        #break
 

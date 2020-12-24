@@ -2,6 +2,7 @@ import building
 import lib.helper as helper
 import lib.obb as obb
 import lib.trigonometry as trig
+from lib.plotter import plot
 import numpy as np
 from lib.logger import log
 
@@ -111,8 +112,8 @@ def generate_parcel_density(nodes, ways, cycle, partitions_left,
     polygon.insert((polygon_idx1+1)%len(polygon), pos1)
     polygon.insert((polygon_idx2+2)%len(polygon), pos2)
 
-    w = building.new_way([n1.id, n2.id], {"highway":"residential"})
-    ways[w.id] = w
+    # w = building.new_way([n1.id, n2.id], {"highway":"residential"})
+    # ways[w.id] = w
 
     p1_index = intersected[0][1]+1
     p2_index = (intersected[1][1]+1)%(len(cycle))
@@ -171,7 +172,7 @@ def generate_parcel_minarea(nodes, ways, cycle, cycle_data):
             if multiplier < 0: raise Exception
         return lower_a
 
-    lower_a = get_lower(cycle_data["avg_area"],cycle_data["std_area"])
+    lower_a = get_lower(cycle_data["avg_area"],cycle_data["std_area"])*3
     upper_a = lower_a * 1.5
     _nodes, _ways = {}, {}
     log("\nLower area bound: {}\nUpper area bound: {}".format(lower_a, upper_a))
@@ -347,7 +348,7 @@ def generate_parcel_minarea(nodes, ways, cycle, cycle_data):
 
     colored_labels = helper.color_highways(ways,nodes)
     #colored_labels = None
-    plot(nodes, ways, tags=None, ways_labels=colored_labels)
+    plot(nodes, ways, tags=None)#, ways_labels=colored_labels)
     #input("Press any key to continue...")
 
     # generate parcel recursively in subcycle1
@@ -356,7 +357,7 @@ def generate_parcel_minarea(nodes, ways, cycle, cycle_data):
     print("Area of Subycle1: {:.10f} (lower_a: {:.10f})".format(area, lower_a))
     if area > lower_a:
         print("Executing recursion Sub1...")
-        generate_parcel(nodes, ways, subcycle1, cycle_data)
+        generate_parcel_minarea(nodes, ways, subcycle1, cycle_data)
     else:
         # place building here
         created_nodes, created_ways = building.generate_offset_polygon_iterative(points)
@@ -369,7 +370,7 @@ def generate_parcel_minarea(nodes, ways, cycle, cycle_data):
     print("Area of Subycle2: {:.10f} (lower_a: {:.10f})".format(area, lower_a))
     if area > lower_a:
         print("Executing recursion Sub2...")
-        generate_parcel(nodes, ways, subcycle2, cycle_data)
+        generate_parcel_minarea(nodes, ways, subcycle2, cycle_data)
     else:
         created_nodes, created_ways = building.generate_offset_polygon_iterative(points)
         nodes.update(created_nodes)

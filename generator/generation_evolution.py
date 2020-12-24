@@ -149,8 +149,7 @@ def main():
     for c_id, d in density.items():
         cycles[c_id]["density"] = len(d)
 
-    sys.exit()
-
+    # a maximum density is set manually in case all cycles are empty
     max_density = max([len(d) for c_id, d in density.items()])
     max_density = 20 if max_density == 0 else max_density
 
@@ -233,48 +232,48 @@ def main():
     #
     # Initialize a pop for cycles
     #
-    # log("Initializing population...")
-    # pop = evo.initialize_pop(full_chrom, chrom_idx, neigh_idx,
-    #                             pop_size=10, min_range=0,
-    #                             max_range=max_density)
+    log("Initializing population...")
+    pop = evo.initialize_pop(full_chrom, chrom_idx, neigh_idx,
+                                pop_size=10, min_range=0,
+                                max_range=max_density)
+
+    #log("Pop[-1] fitness: {}".format(evo.evaluate(pop[-1])))
     #
-    # #log("Pop[-1] fitness: {}".format(evo.evaluate(pop[-1])))
-    # #
-    # # Execute some sort of evolution
-    # #
-    # log("Running evolutionary process...")
-    # evo.generation(pop, chrom_idx, neigh_idx,
-    #                 min_range=0, max_range=max_density, generations=10000)
+    # Execute some sort of evolution
     #
-    # #print("my indiv: {}".format(pop[-1]))
-    #
-    # # Get best individual from evolution process
-    # best_ind = sorted(pop, key=lambda i: i.fitness)[0]
-    # #print("Best individual: {}".format(best_ind))
-    #
-    # print("Parcel densities for best individual: ")
-    # print(best_ind.chromosome)
-    # print("Fitness: {}".format(evo.fitness(best_ind.chromosome,
-    #                                                     chrom_idx, neigh_idx)))
-    #
-    # # Generate on top of best individual
-    # for c in chrom_idx:
-    #     cycle = cycles[c]["n_ids"]
-    #     #print("Cycle: {}".format(cycle))
-    #     density = best_ind.chromosome[c]
-    #     density = density - 1 if density > 0 else 0
-    #     generate_parcel_density(nodes, ways, cycle, density)
-    #
-    #
-    # plotter.plot(nodes, ways)
-    # handler.write_data(output, nodes.values(), ways.values(), -0.002)
-    # print(output)
-    # acc = evaluate(output)
-    # print("Accuracy Output: {}".format(acc))
-    #
-    # acc = evaluate(input)
-    # print("Accuracy Input: {}".format(acc))
-    # log("Execution finished succesfully.")
+    log("Running evolutionary process...")
+    evo.generation(pop, chrom_idx, neigh_idx,
+                    min_range=0, max_range=max_density, generations=10000)
+
+    #print("my indiv: {}".format(pop[-1]))
+
+    # Get best individual from evolution process
+    best_ind = sorted(pop, key=lambda i: i.fitness)[0]
+    #print("Best individual: {}".format(best_ind))
+
+    print("Parcel densities for best individual: ")
+    print(best_ind.chromosome)
+    print("Fitness: {}".format(evo.fitness(best_ind.chromosome,
+                                                        chrom_idx, neigh_idx)))
+
+    # Generate on top of best individual
+    for c in chrom_idx:
+        cycle = cycles[c]["n_ids"]
+        #print("Cycle: {}".format(cycle))
+        density = best_ind.chromosome[c]
+        density = density - 1 if density > 0 else 0
+        generate_parcel_density(nodes, ways, cycle, density)
+
+
+    plotter.plot(nodes, ways)
+    handler.write_data(output, nodes.values(), ways.values(), -0.002)
+    print(output)
+    acc = evaluate(output)
+    print("Accuracy Output: {}".format(acc))
+
+    acc = evaluate(input)
+    print("Accuracy Input: {}".format(acc))
+    log("Execution finished succesfully.")
 
 if __name__ == '__main__':
     main()

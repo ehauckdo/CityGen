@@ -30,19 +30,21 @@ def plot(nodes, ways, tags=None, ways_labels=None):
         for i in range(len(way.nodes)-1):
             n1, n2 = way.nodes[i], way.nodes[i+1]
             if n1 not in pos:
-                G.add_node(n1, node_color=nodes[n1].color)
+                G.add_node(n1, node_color=nodes[n1].color, label=str(n1))
                 pos[n1] = nodes[n1].location
             if n2 not in pos:
-                G.add_node(n2, node_color=nodes[n2].color)
+                G.add_node(n2, node_color=nodes[n2].color, label=str(n2))
                 pos[n2] = nodes[n2].location
             G.add_edge(n1, n2, width=1, edge_color=way.color)
 
-    options = { "node_size": 20, "linewidths": 0}
+    labels = nx.get_node_attributes(G,'label')
+    options = { "node_size": 20, "linewidths": 0}#,"labels":labels}
     edges = G.edges()
     node_color = nx.get_node_attributes(G,'node_color').values()
     edge_width = [G[u][v]['width'] for u,v in edges]
     edge_color = [G[u][v]['edge_color'] for u,v in edges]
-    nx.draw(G, pos, node_color=node_color, edge_color=edge_color,
+
+    nx.draw(G, pos, node_color=node_color, #edge_color=edge_color,
                 width=edge_width, **options)
 
     if ways_labels != None:
