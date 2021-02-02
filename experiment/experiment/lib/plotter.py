@@ -60,30 +60,6 @@ def plot(nodes, ways, tags=None, ways_labels=None):
 
     plt.show()
 
-def plot_cycles(nodes, cycles, tags=None, ways_labels=None):
-    G = nx.Graph()
-    pos = {}
-
-    for c in cycles:
-        for i in range(len(c)):
-            n1 = c[i]
-            n2 = c[(i+1)%len(c)]
-            if n1 not in pos:
-                G.add_node(n1)
-                pos[n1] = nodes[n1].location
-            if n2 not in pos:
-                G.add_node(n2)
-                pos[n2] = nodes[n2].location
-            G.add_edge(n1, n2, width=1)
-
-    options = { "node_size": 20, "linewidths": 0}
-    edges = G.edges()
-    node_color = nx.get_node_attributes(G,'node_color').values()
-    edge_width = [G[u][v]['width'] for u,v in edges]
-    nx.draw(G, pos, width=edge_width, **options)
-
-    plt.show()
-
 def plot_cycles_w_density(nodes, cycles, buildings,tags=None,ways_labels=None):
     G = nx.Graph()
     pos = {}
