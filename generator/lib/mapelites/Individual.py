@@ -1,4 +1,4 @@
-import lib.evolution as evo
+import lib.mapelites.evolution as evo
 
 class Individual():
 

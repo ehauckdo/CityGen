@@ -1,5 +1,6 @@
 from area import area
 import numpy as np
+import os
 from bisect import bisect
 from lib.logger import log
 from lib import settings

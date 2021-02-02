@@ -1,5 +1,5 @@
 import random
-import lib.Individual as Individual
+import lib.mapelites.Individual as Individual
 from lib.logger import log
 import numpy as np
 import math

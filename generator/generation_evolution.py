@@ -2,17 +2,20 @@ import optparse
 import os, sys
 import logging
 from lib.logger import log
-import lib.Individual as Individual
-import lib.evolution as evo
+import lib.mapelites.Individual as Individual
+import lib.mapelites.evolution as evo
 import lib.helper as helper
 import lib.handler as handler
 import lib.plotter as plotter
 import lib.trigonometry as trig
 import pprint
-from parcel import generate_parcel_density
+from lib.parcel import generate_parcel_density
 from classifier.model import evaluate
 
 logging.basicConfig(level=logging.INFO, filemode='w', filename='_main.log')
+
+# supress tensorflow warnings
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 def parse_args(args):
 	usage = "usage: %prog [options]"

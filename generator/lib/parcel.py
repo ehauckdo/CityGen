@@ -1,4 +1,4 @@
-import building
+import lib.building as building
 import lib.helper as helper
 import lib.obb as obb
 import lib.trigonometry as trig

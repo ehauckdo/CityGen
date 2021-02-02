@@ -3,8 +3,8 @@ import os, sys, logging
 from lib.logger import log
 import lib.handler as handler
 import lib.helper as helper
-import lib.evolution as evo
-from parcel import generate_parcel_density
+import lib.mapelites.evolution as evo
+from lib.parcel import generate_parcel_density
 from lib.plotter import plot, plot_cycles_w_density
 from classifier.model import load_model, accuracy
 import copy
@@ -280,10 +280,10 @@ def main():
     # Run evolution
     ##########################
     pop = evo.initialize_pop_ME(chrom, chrom_idx, neigh_idx, areas,
-                             max_buildings=maximum_buildings, pop_size=100)
+                             max_buildings=maximum_buildings, pop_size=10)
 
     evo.generation_ME(pop, chrom_idx, neigh_idx, areas,
-                     max_buildings=maximum_buildings, generations=501)
+                     max_buildings=maximum_buildings, generations=50)
 
     ##########################
     # Parse individuals into osm files
