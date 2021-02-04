@@ -6,7 +6,7 @@ import classifier.Map.Map as map #lib to read the osm file
 import classifier.Renderer.Renderer as renderer #lib to render to image
 
 
-def load_model(model_filename="classifier/weight_tsukuba.hdf5"):
+def load_model(model_filename="classifier/Tsukuba.hdf5"):
     model = val.createModel(model_filename)
     return model
 

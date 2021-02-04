@@ -137,7 +137,7 @@ def parse_args(args):
     parser.add_option('-i', action="store", type="string", dest="filename",
 	   help="OSM input file", default="data/smaller_tsukuba.osm")
     parser.add_option('-m', action="store", type="string", dest="model",
-        help="Model trained on cities", default="classifier/weight_tsukuba.hdf5")
+        help="Model trained on cities", default="classifier/Tsukuba.hdf5")
     parser.add_option('-d', action="store", type="int", dest="density",
         help="Maximum initial density per cell for population", default=10)
     parser.add_option('-a', action="store", type="float", dest="minarea",
