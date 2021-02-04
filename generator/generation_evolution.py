@@ -10,106 +10,56 @@ import lib.plotter as plotter
 import lib.trigonometry as trig
 import pprint
 from lib.parcel import generate_parcel_density
-from classifier.model import evaluate
+from classifier.model import load_model, accuracy
 
-logging.basicConfig(level=logging.INFO, filemode='w', filename='_main.log')
+logging.basicConfig(level=logging.INFO, filemode='w', filename='_log_main')
 
 # supress tensorflow warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-def parse_args(args):
-	usage = "usage: %prog [options]"
-	parser = optparse.OptionParser(usage=usage)
-	parser.add_option('-i', action="store", type="string", dest="filename",
-		help="OSM input file", default="data/smaller_tsukuba.osm")
-	return parser.parse_args()
-
-def main():
-
-    os.system('clear')
-    opt, args = parse_args(sys.argv[1:])
-    input = opt.filename
-    output = "{}_output.osm".format(input)
-    log("Reading OSM file '{}'...".format(input))
-
-    #
-    # Load data
-    #
-    nodes, ways = handler.extract_data(input)
-    helper.update_id_counter(nodes.values())
-
-    #
-    # Fetch road cycles and then filter for road cycles that have no road
-    # nodes inside and for cycles that have a minimum area/ratio
-    #
+def set_colors(nodes, ways):
+    # this is just for helping in plotting
+    # no practical use during execution
+    ways_colors = nodes_colors = {"building":"red", "highway":"black"}
+    helper.set_node_type(ways, nodes)
+    helper.color_nodes(nodes.values(), "black")
+    helper.color_ways(ways, nodes, ways_colors, nodes_colors, default="black")
+def get_roads(nodes, ways, input):
     road_nodes, road_ways = helper.filter_by_tag(nodes, ways, {"highway":None})
     _output = "{}_roads_only.osm".format(input)
     handler.write_data(_output, road_nodes.values(), road_ways.values())
     road_cycles = helper.get_cycles(_output)
-    log("All road cycles identified in {}: {}".format(input, len(road_cycles)))
+    log("All road cycles in {}: {}".format(input, len(road_cycles)), "DEBUG")
 
     _output = "{}_roads_data".format(input)
     usable_cycles = helper.load(_output)
     if usable_cycles == None:
-        log("Fetching empty road cycles of {}...".format(input))
+        log("Computing empty road cycles of {}...".format(input), "DEBUG")
         usable_cycles = helper.remove_nonempty_cycles(road_nodes, road_cycles)
         helper.save(usable_cycles, _output)
     else:
-        log("Loaded empty road cycles from data file {}".format(_output))
+        log("Empty road cycles from file {}".format(_output), "DEBUG")
 
-    log("Number of empty cycles identified: {}".format(len(usable_cycles)))
-
-    ##### Filter cycles that do not have minimum area or ratio
+    log("Number of usable cycles identified: {}".format(len(usable_cycles)),
+                                                                       "DEBUG")
+    return road_nodes, road_ways, road_cycles, usable_cycles
+def filter_small_cycles(nodes, cycles):
     _cycles = []
-    for c in usable_cycles:
+    for c in cycles:
         largest, shortest = helper.get_obb_data(nodes, c)
         ratio = shortest/largest
         area = helper.get_area([nodes[n_id].location for n_id in c])
         #print("Area: {:0.2f}, Ratio: {:0.2f}, Largest: {}, Shortest: {}".format(area, shortest/largest, largest, shortest))
         if area < 3000 or ratio < 0.25: continue
         _cycles.append(c)
-    usable_cycles = _cycles
-
-    #
-    # Parse data into a dict structure
-    #
-    cycles = {}
-    for i in range(len(usable_cycles)):
-        cycles[i] = {"n_ids":usable_cycles[i]}
-
-    #
-    # Calculate centroid of each cycle
-    #
-    log("Calculating centroid for each cycle...")
-    for i in cycles:
-        centroid = helper.centroid([road_nodes[n_id].location for n_id in
-                                                        cycles[i]["n_ids"]])
-        cycles[i]["centroid"] = centroid
-
-    #
-    # Set neighbors for each cycle by selecting the 3 closest cycles from it
-    #
-    # log("Calculating nearest neighbours for each cycle.")
-    # for i in range(len(cycles)):
-    #     distances = []
-    #     for j in range(len(cycles)):
-    #         if i == j: continue
-    #         dist = trig.dist(*cycles[i]["centroid"], *cycles[j]["centroid"])
-    #         distances.append((dist,j))
-    #     distances = [id for coord, id in sorted(distances)]
-    #     cycles[i]["neighbors"] = distances[:3]
-    #     # pp = pprint.PrettyPrinter(indent=4)
-    #     # print("Final cycle: {}".format(i))
-    #     # pp.pprint(cycles[i])
-
-    #
-    # Set neighbors for each cycle by calculating a MST connecting all cycles
-    #
+    return _cycles
+def compute_neighbors_MST(cycles, input):
+    import lib.trigonometry as trig
     _output = "{}_neighbor_data".format(input)
     neighbor_values = helper.load(_output)
 
     if neighbor_values == None:
-        log("Computing neighbors with MST...")
+        log("Computing neighbors with MST...", "DEBUG")
         neighbor_values = {}
         for i in cycles:
             neighbor_values[i] = []
@@ -129,154 +79,198 @@ def main():
             added.append(j)
         helper.save(neighbor_values, _output)
     else:
-        log("Loaded neighbors from MST data file {}".format(_output))
+        log("Loaded MST data from file {}".format(_output), "DEBUG")
 
     for i in neighbor_values:
         cycles[i]["neighbors"] = neighbor_values[i]
-
-    #
-    # Get building density for each cycle
-    #
+def compute_neighbors_closest(cycles, n=3):
+    import lib.trigonometry as trig
+    log("Calculating nearest {} neighbours for each cycle.".format(n), "DEBUG")
+    for i in range(len(cycles)):
+        distances = []
+        for j in range(len(cycles)):
+            if i == j: continue
+            dist = trig.dist(*cycles[i]["centroid"], *cycles[j]["centroid"])
+            distances.append((dist,j))
+        distances = [id for coord, id in sorted(distances)]
+        cycles[i]["neighbors"] = distances[:n]
+def compute_centroids(cycles, nodes):
+    for i in cycles:
+        centroid = helper.centroid([nodes[n_id].location for n_id in
+                                                        cycles[i]["n_ids"]])
+        cycles[i]["centroid"] = centroid
+def compute_building_density(cycles, input, nodes, ways):
     _output = "{}_building_density_data".format(input)
     density = helper.load(_output)
     if density == None:
-        log("Fetching building density data...")
+        log("Computing building density data...", "DEBUG")
         density = {}
         for c_id, cycle in cycles.items():
             d = helper.building_density(nodes, ways, cycle["n_ids"])
             density[c_id] = d
         helper.save(density, _output)
     else:
-        log("Loaded building density data from file {}".format(_output))
+        log("Loaded building density from file {}".format(_output), "DEBUG")
 
     for c_id, d in density.items():
+        nodes_coord = [nodes[x].location for x in cycles[c_id]["n_ids"]]
         cycles[c_id]["density"] = len(d)
+        cycles[c_id]["area"] = helper.get_area(nodes_coord)/1000000 # in km2
+        cycles[c_id]["actual_density"] = len(d) / cycles[c_id]["area"]
+        #print("cycle_id {}: b{}, a{:.2f}, d{:.2f}".format(c_id, len(d), cycles[c_id]["area"], cycles[c_id]["actual_density"]))
+        cycles[c_id]["buildings"] = d
+def generate_ind(nodes,ways,cycles,ind,chrom_idx,neigh_idx,output="data/ind.osm"):
+    import copy
+    _nodes = copy.deepcopy(nodes)
+    _ways = copy.deepcopy(ways)
+    for idx in chrom_idx:
+        cycle_data = cycles[idx]
+        cycle_nodes = cycle_data["n_ids"]
+        density = ind.chromosome[idx]
+        generate_parcel_density(_nodes, _ways, cycle_nodes, density)
+    handler.write_data(output,_nodes.values(),_ways.values())
+    return _nodes, _ways
 
-    # a maximum density is set manually in case all cycles are empty
-    max_density = max([len(d) for c_id, d in density.items()])
-    max_density = 20 if max_density == 0 else max_density
+def parse_args(args):
+    usage = "usage: %prog [options]"
+    parser = optparse.OptionParser(usage=usage)
+    parser.add_option('-i', action="store", type="string", dest="filename",
+	   help="OSM input file", default="data/smaller_tsukuba.osm")
+    parser.add_option('-m', action="store", type="string", dest="model",
+        help="Model trained on cities", default="classifier/weight_tsukuba.hdf5")
+    parser.add_option('-d', action="store", type="int", dest="density",
+        help="Maximum initial density per cell for population", default=10)
+    parser.add_option('-a', action="store", type="float", dest="minarea",
+        help="Minimum area necessary for a building",default=(1500/5000000))
+    parser.add_option('-o', action="store", type="string", dest="output_folder",
+        help="Output folder", default="output")
+    return parser.parse_args()
 
+def main():
+    os.system('clear')
+    log("Starting program...")
+
+    opt, args = parse_args(sys.argv[1:])
+    input = opt.filename
+    output = "{}_output.osm".format(input)
+    output = opt.output_folder
+    helper.create_folder(output)
+
+    ##########################
+    # Loading OSM data
+    ##########################
+    log("Loading OSM file '{}'...".format(input))
+    nodes, ways = handler.extract_data(input)
+    helper.update_id_counter(nodes.values())
+    set_colors(nodes, ways)
+
+    ##########################
+    # Fetching cycles
+    ##########################
+    r_nodes, r_ways, r_cycles, cycles = get_roads(nodes, ways, input)
+    cycles = filter_small_cycles(nodes, cycles)
+    cycles = {id:{"n_ids":cycle} for id, cycle in enumerate(cycles)}
+
+    ##########################
+    # Compute various data for each cycle
+    ##########################
+    compute_centroids(cycles, nodes)
+    # compute_neighbors_closest(cycles, 3)
+    compute_neighbors_MST(cycles, input)
+    compute_building_density(cycles, input, nodes, ways)
+
+    ##########################
+    # Easy to visualize plot (only roads, then roads+buildings)
+    ##########################
+    # buildings = {}
+    # for c_id in cycles:
+    #    try:
+    #        buildings.update(cycles[c_id]["buildings"])
+    #    except:
+    #        print("Failed to fetch density of {}".format(c_id))
     #
-    # Save indexes of cycles that have no buildings on them. We will operate
-    # on these cycles and leave the ones with buildings alone.
-    #
-    chrom_idx, neigh_idx = [], []
-    for idx in cycles:
-        if cycles[idx]["density"] == 0:
-            chrom_idx.append(idx)
-            neigh_idx.append(cycles[idx]["neighbors"])
+    # plot(nodes, ways, tags=[("highway",None)])
+    # plot_cycles_w_density(nodes, cycles, buildings)
+    # sys.exit()
 
-    full_chrom = [cycles[i]["density"] for i in cycles]
-    # print("full_chrom: ")
-    # print(" ".join(str(c) for c in full_chrom))
-    #
-    # print("chrom_idx: ")
-    # print(" ".join(str(c) for c in chrom_idx))
-    #
-    # print("neigh_idx: ")
-    # print(" ".join(str(c) for c in neigh_idx))
+    ##########################
+    # Initialize data for evolution
+    ##########################
+    chrom = [cycles[i]["density"] for i in cycles]
+    areas = [cycles[i]["area"] for i in cycles]
+    chrom_idx = [idx for idx in cycles if cycles[idx]["density"] == 0]
+    neigh_idx = [cycles[idx]["neighbors"] for idx in cycles
+                                            if cycles[idx]["density"] == 0]
+    # maximum building number based on area
+    maximum_buildings = sum(areas)/opt.minarea
+    # maximum building number set manually
+    maximum_buildings = 50
 
-    helper.set_node_type(ways, nodes)
-    helper.color_nodes(nodes.values(), "black")
-    ways_colors = nodes_colors = {"building":"red", "highway":"black"}
-    helper.color_ways(ways, nodes, ways_colors, nodes_colors, default="black")
-    colored_labels = helper.color_highways(ways, nodes)
-    #plotter.plot(nodes, ways, tags=[("highway",None)])
+    # calculating current existing number of buildings for reference
+    # (existing buildings also count for maxi number of buildings in the area)
+    existing_buildings = 0
+    for i in range(len(chrom)):
+        if i not in chrom_idx:
+            existing_buildings += chrom[i]
+    log("Current and maximum number of buildings: {:.2f}, {:.2f}".format(
+                                    existing_buildings, maximum_buildings))
 
-    #
-    # Easy to visualize plot of the density
-    #
-    buildings = {}
-    for c_id, d in density.items():
-        buildings.update(d)
-    plotter.plot_cycles_w_density(nodes, cycles, buildings)
-    #plotter.plot(nodes, ways)
+    ##########################
+    # Run evolution
+    ##########################
+    pop = evo.initialize_pop_ME(chrom, chrom_idx, neigh_idx, areas,
+                             max_buildings=maximum_buildings, pop_size=10)
 
-    print("Parcel densities: ")
-    print(full_chrom)
-    print("Fitness: {}".format(evo.fitness(full_chrom, chrom_idx, neigh_idx)))
+    evo.generation_ME(pop, chrom_idx, neigh_idx, areas,
+                     max_buildings=maximum_buildings, generations=200)
 
-    # #
-    # # Manual setting of densities to compare against evolution
-    # #
-    # import random
-    # ind = Individual.Individual(full_chrom)
-    # ind.fitness = evo.fitness(full_chrom, chrom_idx, neigh_idx)
-    # print("Fitness: {}".format(ind.fitness))
-    #
-    # completed = []
-    # for i in range(100):
-    #     for c_idx, n_idx_list in zip(chrom_idx, neigh_idx):
-    #         print("Inspecting c_idx {} with neighbors {}".format(c_idx, n_idx_list))
-    #         if full_chrom[c_idx] == 0 and max([full_chrom[n_idx] for n_idx in n_idx_list]) == 0:
-    #                 continue
-    #         if full_chrom[c_idx] == 0:
-    #             maxi = max([full_chrom[n_idx] for n_idx in n_idx_list])
-    #             new_density = maxi #random.randint(int(maxi*0.8), int(maxi*1.2))
-    #             full_chrom[c_idx] = new_density
-    #             completed.append(c_idx)
-    #     ind.fitness = evo.fitness(full_chrom, chrom_idx, neigh_idx)
-    #     print("Fitness: {}".format(ind.fitness))
-    # print("Untouched nodes: {}".format([x for x in chrom_idx if x not in completed]))
-    #
-    # print("Full chrom: ")
-    # print(full_chrom)
-    # ind.fitness = evo.fitness(full_chrom, chrom_idx, neigh_idx)
-    # print("Fitness: {}".format(ind.fitness))
-    #
-    # for c in chrom_idx:
-    #     cycles[c]["density"] = full_chrom[c]
-    #     cycle = cycles[c]["n_ids"]
-    #     print("Cycle: {}".format(cycle))
-    #     density = cycles[c]["density"]
-    #     density = density - 1 if density > 0 else 0
-    #     generate_parcel_density(nodes, ways, cycle, density)
+    ##########################
+    # Parse individuals into osm files
+    # and get similarity from model
+    ##########################
+    top_individuals = evo.top_individuals_ME(pop)
 
-    #
-    # Initialize a pop for cycles
-    #
-    log("Initializing population...")
-    pop = evo.initialize_pop(full_chrom, chrom_idx, neigh_idx,
-                                pop_size=10, min_range=0,
-                                max_range=max_density)
+    top_acc = (0,0)
+    pop_range = 10
+    output_file = "{}/experiment_top[{}][{}].osm"
+    accuracies = [[[] for i in range(pop_range)] for j in range(pop_range)]
+    log("Starting evaluation process...")
+    model = load_model(opt.model)
+    file1 = open("_log_accuracies".format(output),"w")
+    for i in range(len(top_individuals)):
+        for j in range(len(top_individuals[i])):
+            pop = top_individuals[i][j]
+            acc = 0
+            if len(pop) > 0:
+                top_ind = top_individuals[i][j][0]
+                ind_file = output_file.format(output, i,j)
+                log("Saving generated output to {}...".format(ind_file))
+                _n, _w = generate_ind(nodes,ways,cycles,top_ind,
+                                       chrom_idx,neigh_idx,ind_file)
+                acc = accuracy(ind_file, model)
+                log("Accuracy: {:.5f}".format(acc))
 
-    #log("Pop[-1] fitness: {}".format(evo.evaluate(pop[-1])))
-    #
-    # Execute some sort of evolution
-    #
-    log("Running evolutionary process...")
-    evo.generation(pop, chrom_idx, neigh_idx,
-                    min_range=0, max_range=max_density, generations=10000)
+            accuracies[i][j].append(acc)
+            if accuracies[i][j] > accuracies[top_acc[0]][top_acc[1]]:
+                top_acc = (i,j)
+            file1.write("{},{},{}\n".format(i,j,acc))
 
-    #print("my indiv: {}".format(pop[-1]))
+    file1.close()
+    for i in range(len(accuracies)):
+        for j in range(len(accuracies[i])):
+            print("Accuracies for [{}][{}]: {}".format(i,j, accuracies[i][j]))
 
-    # Get best individual from evolution process
-    best_ind = sorted(pop, key=lambda i: i.fitness)[0]
-    #print("Best individual: {}".format(best_ind))
+    best_output = output_file.format(output, top_acc[0], top_acc[1])
+    print("Best output in terms of similarity: {}".format(best_output))
 
-    print("Parcel densities for best individual: ")
-    print(best_ind.chromosome)
-    print("Fitness: {}".format(evo.fitness(best_ind.chromosome,
-                                                        chrom_idx, neigh_idx)))
+    ##########################
+    # Plot of the output (optional)
+    ##########################
+    # _nodes, _ways = handler.extract_data(best_output)
+    # set_colors(_nodes, _ways)
+    # plot(_nodes, _ways)
 
-    # Generate on top of best individual
-    for c in chrom_idx:
-        cycle = cycles[c]["n_ids"]
-        #print("Cycle: {}".format(cycle))
-        density = best_ind.chromosome[c]
-        density = density - 1 if density > 0 else 0
-        generate_parcel_density(nodes, ways, cycle, density)
-
-
-    plotter.plot(nodes, ways)
-    handler.write_data(output, nodes.values(), ways.values(), -0.002)
-    print(output)
-    acc = evaluate(output)
-    print("Accuracy Output: {}".format(acc))
-
-    acc = evaluate(input)
-    print("Accuracy Input: {}".format(acc))
-    log("Execution finished succesfully.")
+    log("Generation finished.\n\n")
 
 if __name__ == '__main__':
     main()

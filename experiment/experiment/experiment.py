@@ -10,7 +10,7 @@ from classifier.model import load_model, accuracy
 import copy
 
 # set up logging
-logging.basicConfig(level=logging.INFO, filemode='w', filename='_main.log')
+logging.basicConfig(level=logging.INFO, filemode='w', filename='_log_main')
 
 # supress tensorflow warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -167,9 +167,15 @@ def main():
     helper.update_id_counter(nodes.values())
     set_colors(nodes, ways)
 
+    ##########################
+    # Fetching cycles
+    ##########################
     log("Computing road information and cycles...")
-    r_nodes, r_ways, r_cycles, cycles = get_roads(nodes, ways, input)
+    # use these functions to attempt to fetch cycles from
+    # the road network graph of the input data
+    # #r_nodes, r_ways, r_cycles, cycles = get_roads(nodes, ways, input)
     # cycles = filter_small_cycles(nodes, cycles)
+
     # fixed pre-fetched cycles for sumidaku
     cycles = [[1197987560, 1197987449, 1361175762, 1361175760, 1361175752, 1361176778],
                 [1361175762, 1361175760, 1361175750, 1361175751],
@@ -237,18 +243,18 @@ def main():
     compute_building_density(cycles, input, nodes, ways)
 
     ##########################
-    # Easy to visualize plot
+    # Easy to visualize plot (only roads, then roads+buildings)
     ##########################
-    buildings = {}
-    for c_id in cycles:
-       try:
-           buildings.update(cycles[c_id]["buildings"])
-       except:
-           print("Failed to fetch density of {}".format(c_id))
-
-    #plot(nodes, ways, tags=[("highway",None)])
-    #plot_cycles_w_density(nodes, cycles, buildings)
-    #sys.exit()
+    # buildings = {}
+    # for c_id in cycles:
+    #    try:
+    #        buildings.update(cycles[c_id]["buildings"])
+    #    except:
+    #        print("Failed to fetch density of {}".format(c_id))
+    #
+    # plot(nodes, ways, tags=[("highway",None)])
+    # plot_cycles_w_density(nodes, cycles, buildings)
+    # sys.exit()
 
     ##########################
     # Initialize data for experiment
@@ -259,22 +265,19 @@ def main():
     neigh_idx = [cycles[idx]["neighbors"] for idx in cycles
                                             if cycles[idx]["density"] == 0]
 
-    initial_density = max([cycles[c_id]["density"] for c_id in cycles])
-    initial_density = opt.density if initial_density == 0 else initial_density
-
+    # maximum building number based on area
     maximum_buildings = sum(areas)/opt.minarea
-    maximum_density = maximum_buildings/sum(areas)
+    # maximum building number set manually
     maximum_buildings = 300
 
+    # calculating current existing number of buildings for reference
+    # (existing buildings also count for maxi number of buildings in the area)
     existing_buildings = 0
     for i in range(len(chrom)):
         if i not in chrom_idx:
             existing_buildings += chrom[i]
-
-    log("maximum buildings: {}".format(maximum_buildings))
     log("Current and maximum number of buildings: {:.2f}, {:.2f}".format(
                                     existing_buildings, maximum_buildings))
-
 
     ##########################
     # Run evolution
@@ -287,44 +290,48 @@ def main():
 
     ##########################
     # Parse individuals into osm files
+    # and get similarity from model
     ##########################
     top_individuals = evo.top_individuals_ME(pop)
 
+    top_acc = (0,0)
     pop_range = 10
+    output_file = "{}/experiment_top[{}][{}].osm"
     accuracies = [[[] for i in range(pop_range)] for j in range(pop_range)]
     log("Starting evaluation process...")
-    file1 = open("exp_accuracies.txt".format(output),"w")
+    file1 = open("_log_accuracies".format(output),"w")
     for i in range(len(top_individuals)):
         for j in range(len(top_individuals[i])):
             pop = top_individuals[i][j]
             acc = 0
             if len(pop) > 0:
                 top_ind = top_individuals[i][j][0]
-                ind_file = "{}/experiment_top[{}][{}].osm".format(output, i,j)
+                ind_file = output_file.format(output, i,j)
                 log("Saving generated output to {}...".format(ind_file))
                 _n, _w = generate_ind(nodes,ways,cycles,top_ind,
                                        chrom_idx,neigh_idx,ind_file)
-                log("Starting evlaluation...")
                 acc = accuracy(ind_file, model)
-                log("Evaluation complete. Acc: {:.5f}".format(acc))
-
-                # ##########################
-                # # Easy to visualize plot
-                # ##########################
-                # print("Top [{}][{}]".format(i,j))
-                # _b = copy.deepcopy(buildings)
-                # for w_id, w in _w.items():
-                #     if "building" in w.tags and w_id not in ways:
-                #         _b[w_id] = w
-                # plot_cycles_w_density(_n, cycles, _b)
+                log("Accuracy: {:.5f}".format(acc))
 
             accuracies[i][j].append(acc)
-            file1.write("{}\n".format(acc))
+            if accuracies[i][j] > accuracies[top_acc[0]][top_acc[1]]:
+                top_acc = (i,j)
+            file1.write("{},{},{}\n".format(i,j,acc))
 
     file1.close()
     for i in range(len(accuracies)):
         for j in range(len(accuracies[i])):
             print("Accuracies for [{}][{}]: {}".format(i,j, accuracies[i][j]))
+
+    best_output = output_file.format(output, top_acc[0], top_acc[1])
+    print("Best output in terms of similarity: {}".format(best_output))
+
+    ##########################
+    # Plot of the output (optional)
+    ##########################
+    # _nodes, _ways = handler.extract_data(best_output)
+    # set_colors(_nodes, _ways)
+    # plot(_nodes, _ways)
 
     log("Experiment finished.\n\n")
 

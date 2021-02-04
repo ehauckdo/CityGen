@@ -1,3 +1,4 @@
+import os
 from area import area
 import numpy as np
 from bisect import bisect
