@@ -4,9 +4,9 @@ This repository contains the code for the manuscript Building Placements Generat
 
 Contents:
 
-Manuscript: ```manuscript\```
-Main code: ```generator\```
-Experiment code: ```experiment\```
+Main code: ```/generator```  
+Experiment code: ```/experiment```  
+Manuscript: ```/manuscript```  
 
 ## How to run the experiment?
 
