@@ -319,10 +319,10 @@ def building_density(nodes,ways,cycle):
                 detected_ways[w_id] = way
                 break
 
-    import pprint
+    # import pprint
     # print("Total detected ways inside cycle:")
-    pp = pprint.PrettyPrinter(indent=4)
-    pp.pprint([(x.id, x.tags) for x in detected_ways.values()])
+    # pp = pprint.PrettyPrinter(indent=4)
+    # pp.pprint([(x.id, x.tags) for x in detected_ways.values()])
 
     building_ways = {}
     for w_id, way in detected_ways.items():
