@@ -9,7 +9,7 @@ highest_e = 0
 def normalize(value):
     return value/highest_e
 
-def fitness_density(full_chrom, chrom_idx, neigh_idx, areas):
+def density_error(full_chrom, chrom_idx, neigh_idx, areas):
     errors = []
 
     def get_error(main, neighbors, minimum_error=0):
@@ -35,7 +35,7 @@ def fitness_density(full_chrom, chrom_idx, neigh_idx, areas):
         #                                        neighbor_densities, error))
     return sum(errors)
 
-def similarity(chrom1, chrom2, chrom_idx):
+def similarity_order(chrom1, chrom2, chrom_idx):
 
     def density_order(chrom):
         # obtain an array of indexes by by ascending order
@@ -100,8 +100,8 @@ def mutate_ME(individual, chrom_idx, min_range=0, max_range=10, mut_rate=0.1):
 
 def initialize_pop_ME(chrom, chrom_idx, neigh_idx, areas, max_buildings, pop_size=10):
 
+    # gives a very rough approximation of the highest error
     def highest_error(chrom, chrom_idx, neigh_idx, areas, max_buildings):
-        # gives a very rough approximation of the highest error
         global highest_e
         archive = []
         for i in range(100000):
@@ -110,7 +110,7 @@ def initialize_pop_ME(chrom, chrom_idx, neigh_idx, areas, max_buildings, pop_siz
             genes = [int(random.random()*max_parcel) for x in range(len(chrom))]
             for c_idx in chrom_idx: new_chrom[c_idx] = genes[c_idx]
             individual = Individual.Individual(new_chrom)
-            individual.fitness = fitness_density(new_chrom, chrom_idx, neigh_idx, areas)
+            individual.fitness = density_error(new_chrom, chrom_idx, neigh_idx, areas)
             archive.append(individual)
         highest_e = max([x.fitness for x in archive])
         return max([x.fitness for x in archive])
@@ -127,23 +127,20 @@ def initialize_pop_ME(chrom, chrom_idx, neigh_idx, areas, max_buildings, pop_siz
 
     misses = 0
     archive = []
+    # we will generate random candidates to fit each part of the range
+    # between min and max_buildings (e.g 0-20, 21-40, 41-60 etc)
     for a in range(pop_size):
         r = np.linspace(0, max_buildings, pop_range+1)
 
-        # we will generate random candidates to fit each part of the range
-        # between min and max_buildings (e.g 0-20, 21-40, 41-60 etc)
         for it in range(len(r)-1):
             # create a new chrom clone
             new_chrom = [g for g in chrom]
 
             min_limit, max_limit = r[it], r[it+1]
-            #print(min_limit, max_limit)
             # find a vector size appropriate to distribute max_buiildings
             vector_limit = len(chrom_idx) if len(chrom_idx) < int(max_limit/2) else int(max_limit/2)
             size_vector = random.randint(1, vector_limit)
             desired_buildings = random.randint(min_limit, max_limit)
-            #print("limits: ", vector_limit, max_limit)
-            #print("values: ", size_vector, desired_buildings)
 
             vector = [random.random() for x in range(size_vector)]
             generated_sum = sum(vector)
@@ -160,7 +157,7 @@ def initialize_pop_ME(chrom, chrom_idx, neigh_idx, areas, max_buildings, pop_siz
                 new_chrom[chrom_idx[idx]] = vector[i]
 
             ind = Individual.Individual(new_chrom)
-            ind.fitness = fitness_density(new_chrom, chrom_idx, neigh_idx, areas)
+            ind.fitness = density_error(new_chrom, chrom_idx, neigh_idx, areas)
             nbuildings = 0
             for idx in chrom_idx:
                 nbuildings += new_chrom[idx]
@@ -178,6 +175,8 @@ def initialize_pop_ME(chrom, chrom_idx, neigh_idx, areas, max_buildings, pop_siz
     highest_e = max([x.fitness for x in archive])
     print("highest_error: {}".format(highest_e))
 
+    # after an initial archive of individuals was generated, distribute
+    # them in the appropriate cells of MAP-Elites
     while len(archive) > 0:
         ind = archive.pop(0)
         nbuildings = 0
@@ -196,13 +195,12 @@ def initialize_pop_ME(chrom, chrom_idx, neigh_idx, areas, max_buildings, pop_siz
 
     return population
 
-def generation_ME(population, chrom_idx, neigh_idx, areas, max_buildings, generations=1000):
+def generation_ME(population, chrom_idx, neigh_idx, areas, max_buildings, generations=1000,pop_range=10):
 
-    pop_range = 10
     file1 = open("_log_mapelites","w")
     file1.write("gen,x,y,pop,min,max,avg,std\n")
 
-    def get_data(p):
+    def get_pop_data(p):
         import numpy as np
         fitnesses = [x.fitness for x in p]
         mini = min(fitnesses)
@@ -217,10 +215,6 @@ def generation_ME(population, chrom_idx, neigh_idx, areas, max_buildings, genera
         bisect_range = np.linspace(min, max, partitions+1)
         b_index = bisect.bisect(bisect_range, value)-1
         return b_index
-    def downsize(population, limit=10):
-        for i in range(len(population)):
-            for j in range(len(population[i])):
-                population[i][j] = sorted(population[i][j], key=lambda x: x.fitness)[:limit]
     def downsize_diversity(population, similarity_limit=0.5):
         for i in range(len(population)):
             for j in range(len(population[i])):
@@ -244,14 +238,16 @@ def generation_ME(population, chrom_idx, neigh_idx, areas, max_buildings, genera
 
         for i, j, ind in all_individuals:
             child = Individual.Individual(ind.chromosome)
-            #max_mut = 10
+            # the intensity of mutation is proportioinal to the current total no of buildings
             max_mut = math.ceil(max_buildings/len(chrom_idx))*(i+2)
             mutate_ME(child, chrom_idx, 0, max_mut, 0.1)
-            child.fitness = fitness_density(child.chromosome, chrom_idx, neigh_idx, areas)
+            child.fitness = density_error(child.chromosome, chrom_idx, neigh_idx, areas)
             child.fitness = normalize(child.fitness)
             nbuildings = 0
             for idx in chrom_idx:
                 nbuildings += child.chromosome[idx]
+
+            # get new indexes in the grid and place in the appropriate cell
             d_idx = get_index(nbuildings, 0, max_buildings, pop_range)
             e_idx = get_index(child.fitness, 0, 1, pop_range)
 
@@ -265,30 +261,28 @@ def generation_ME(population, chrom_idx, neigh_idx, areas, max_buildings, genera
                 population[i][j].append(child)
 
     for gen in range(generations):
+        # log some data from pop every few generations
         if gen % 100 == 0:
-            # log some data from pop
             log("Generation: {}".format(gen))
             for i in range(len(population)):
-                total_ind_per_range = 0
                 for j in range(len(population[i])):
                     pop = population[i][j]
-                    total_ind_per_range += len(pop)
-                    if len(pop) == 0: n_bui, mini, maxi, avg, std = 0,0,0,0,0
-                    else: n_bui, mini, maxi, avg, std = get_data(pop)
+                    # if there's no candidates initialize all stats as 0
+                    if len(pop) == 0:
+                        n_bui, mini, maxi, avg, std = 0,0,0,0,0
+                    else:
+                        n_bui, mini, maxi, avg, std = get_pop_data(pop)
                     file1.write("{},{},{},{},{:.2f},{:.2f},{:.2f},{:.2f}".format(gen,i,j,len(pop),mini,maxi,avg,std))
                     log("Population [{}][{}], Cap: {}, n_bui:{}, best:{:.2f}, worst:{:.2f}, "  \
                             "avg:{:.2f}, std:{:.2f}".format(i,j, len(pop), n_bui, mini, maxi, avg, std))
                     file1.write("\n")
 
         steadystate(population, chrom_idx, max_buildings, neigh_idx, areas, pop_range)
-
-        #downsize(population)
         downsize_diversity(population, 0.35)
 
     file1.close()
 
-def top_individuals_ME(population, n_ind=1):
-    pop_range = 10
+def top_individuals_ME(population, n_ind=1, pop_range=10):
     top_individuals = [[[] for i in range(pop_range)] for j in range(pop_range)]
     for i in range(len(population)):
         for j in range(len(population)):

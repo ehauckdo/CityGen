@@ -6,6 +6,9 @@ from lib.plotter import plot
 import numpy as np
 from lib.logger import log
 
+# partitioning algorithm for a road cycle
+# partitions_left tells the algorithm how many times to partitioning the polygon
+# min_obb_ration and min_area are the minimum conditions for partitioning
 def generate_parcel_density(nodes, ways, cycle, partitions_left, min_obb_ratio=0.25, min_area=3000):
 
     polygon = [nodes[n_id].location for n_id in cycle]

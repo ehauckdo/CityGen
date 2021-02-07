@@ -1,37 +1,6 @@
 
 import matplotlib.pyplot as plt
 import numpy as np
-
-# source: https://stackoverflow.com/a/45276634
-def get_OBB(polygon):
-    ca = np.cov(polygon,y = None,rowvar = 0,bias = 1)
-
-    v, vect = np.linalg.eig(ca)
-    tvect = np.transpose(vect)
-
-    #use the inverse of the eigenvectors as a rotation matrix and
-    #rotate the points so they align with the x and y axes
-    ar = np.dot(polygon,vect)
-
-    # get the minimum and maximum x and y
-    mina = np.min(ar,axis=0)
-    maxa = np.max(ar,axis=0)
-    diff = (maxa - mina)*0.5
-
-    # the center is just half way between the min and max xy
-    center = mina + diff
-
-    #get the 4 corners by subtracting and adding half the bounding boxes height and width to the center
-    corners = np.array([center+[-diff[0],-diff[1]],center+[diff[0],-diff[1]],center+[diff[0],diff[1]],center+[-diff[0],diff[1]],center+[-diff[0],-diff[1]]])
-
-    #use the the eigenvectors as a rotation matrix and
-    #rotate the corners and the centerback
-    corners = np.dot(corners,tvect)
-    center = np.dot(center,tvect)
-
-    return corners
-
-import numpy as np
 from scipy.spatial import ConvexHull
 
 # source: https://gis.stackexchange.com/a/169633
@@ -106,5 +75,3 @@ def demo():
     #(6.3, 3.6), (9.7, 6.3), (10.0, 4.9), (11.0, 3.6), (12.5, 6.4)]))
     box = [(0.0,0.0), (5.0,0.0), (5.0,5.0), (0.0,5.0), (0.0,0.0)]
     print(minimum_bounding_rectangle(np.array(box)))
-
-demo()

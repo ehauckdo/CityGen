@@ -6,7 +6,7 @@ def dist(x1, y1, x2, y2):
     return math.sqrt((x2-x1)**2 + (y2-y1)**2)
 
 def intersect(x1, y1, x2, y2, x3, y3, x4, y4):
-    # I got this implementation from the internet and it appears to work
+    # unchecked implementation that appears to work
     # I can implement my own using the cross product vector based approach
     # where p * tr = q * us
     def ccw(x1, y1, x2, y2, x3, y3):
@@ -46,19 +46,6 @@ def has_intersection(polygon1, polygon2):
             if intersect(x1, y1, x2, y2, x3, y3, x4, y4):
                 return True
     return False
-
-def point_inside_polygon_raycasting(x, y, polygon):
-    # this implementation has shown errors in some cases
-    # so use of the other function is preferred
-    count = 0
-    for i in range(len(polygon)-1):
-        x1, y1 = polygon[i]
-        x2, y2 = polygon[i+1]
-        if (y > y1 and y < y2) or (y > y2 and y < y1):
-            m = (y2-y1)/(x2-x1+0.000001)
-            ray_x = x1 + (y - y1)/m
-            if ray_x > x:  count +=1
-    return count % 2 == 1
 
 def point_inside_polygon(x, y, polygon):
     # source: https://stackoverflow.com/a/23453678
@@ -133,6 +120,7 @@ def get_angle(lat1, long1, lat2, long2):
 
     return brng
 
+# playing and understanding the code
 def line_manipulation_demo():
 
     # points in a line

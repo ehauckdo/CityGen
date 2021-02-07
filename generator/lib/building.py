@@ -20,15 +20,15 @@ def new_way(nodes=[], tags={}):
     way = OSMWay()
     way.id = settings.id_counter
     settings.id_counter += 1
-    way.color = "blue"
+    way.color = "blue" #  manually set buildings as specific color
     way.nodes = nodes
     way.tags = tags
     return way
 
+# find a polygon that has less than 50% of the area
+# of the lot and use that for the building itself
 def generate_offset_polygon_iterative(lot, threshold=0.8, offset=-10000):
-    # this implementation is a bit slower than generate_offset_polygon
-    # but it will find a polygon that has less than 50% of the area
-    # of the lot and use that for the building itself
+    
     nodes, ways = {}, {}
     subj = []
     initial_area = generated_area = helper.get_area(lot)
