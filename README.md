@@ -13,13 +13,9 @@ Manuscript: ```/manuscript```
 
 ```conda env create -f environment.yml```
 
-Invoke the created conda environment with:
+2 - Invoke the created conda environment with:
 
 ```conda activate experiment_env```
-
-2 - Pip install the package in editable state from the root folder:
-
-```pip install -e .```
 
 3 - You can run the main code by navigating to ```/generator``` and running:
 
