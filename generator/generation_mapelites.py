@@ -17,13 +17,17 @@ logging.basicConfig(level=logging.INFO, filemode='w', filename='_log_main')
 # supress tensorflow warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
+# this function adds some properties to nodes and ways objects for
+# the a better plotting, no practical use for generation
 def set_colors(nodes, ways):
-    # this is just for helping in plotting
-    # no practical use during execution
     ways_colors = nodes_colors = {"building":"red", "highway":"black"}
     helper.set_node_type(ways, nodes)
     helper.color_nodes(nodes.values(), "black")
     helper.color_ways(ways, nodes, ways_colors, nodes_colors, default="black")
+
+# this function filters all nodes and ways that belong to roads
+# and returns all cycles identified (road_cycles) in them and the subset
+# of those cycles (usable_cycles) that have no other road nodes inside them
 def get_roads(nodes, ways, input):
     road_nodes, road_ways = helper.filter_by_tag(nodes, ways, {"highway":None})
     _output = "{}_roads_only.osm".format(input)
@@ -43,6 +47,9 @@ def get_roads(nodes, ways, input):
     log("Number of usable cycles identified: {}".format(len(usable_cycles)),
                                                                        "DEBUG")
     return road_nodes, road_ways, road_cycles, usable_cycles
+
+# filter cycles that do not have a minimum area (defined manually)
+# areas under these thresholds would be very difficult to generate placements
 def filter_small_cycles(nodes, cycles):
     _cycles = []
     for c in cycles:
@@ -53,6 +60,9 @@ def filter_small_cycles(nodes, cycles):
         if area < 3000 or ratio < 0.25: continue
         _cycles.append(c)
     return _cycles
+
+# given a list of cycles, find the minimum spanning tree connecting their
+# centroids and add neighbouring nodes from this tree to the data in cycles
 def compute_neighbors_MST(cycles, input):
     import lib.trigonometry as trig
     _output = "{}_neighbor_data".format(input)
@@ -83,6 +93,9 @@ def compute_neighbors_MST(cycles, input):
 
     for i in neighbor_values:
         cycles[i]["neighbors"] = neighbor_values[i]
+
+# given a list of cycles, find the n closest cycles to them from their
+# centroids and add them as neighbouring cycles (alternative to MST)
 def compute_neighbors_closest(cycles, n=3):
     import lib.trigonometry as trig
     log("Calculating nearest {} neighbours for each cycle.".format(n), "DEBUG")
@@ -94,11 +107,14 @@ def compute_neighbors_closest(cycles, n=3):
             distances.append((dist,j))
         distances = [id for coord, id in sorted(distances)]
         cycles[i]["neighbors"] = distances[:n]
+
 def compute_centroids(cycles, nodes):
     for i in cycles:
         centroid = helper.centroid([nodes[n_id].location for n_id in
                                                         cycles[i]["n_ids"]])
         cycles[i]["centroid"] = centroid
+
+# compute density and number of buildings for each cycle in cycles
 def compute_building_density(cycles, input, nodes, ways):
     _output = "{}_building_density_data".format(input)
     density = helper.load(_output)
@@ -117,9 +133,11 @@ def compute_building_density(cycles, input, nodes, ways):
         cycles[c_id]["density"] = len(d)
         cycles[c_id]["area"] = helper.get_area(nodes_coord)/1000000 # in km2
         cycles[c_id]["actual_density"] = len(d) / cycles[c_id]["area"]
-        #print("cycle_id {}: b{}, a{:.2f}, d{:.2f}".format(c_id, len(d), cycles[c_id]["area"], cycles[c_id]["actual_density"]))
         cycles[c_id]["buildings"] = d
-def generate_ind(nodes,ways,cycles,ind,chrom_idx,neigh_idx,output="data/ind.osm"):
+
+# given the original nodes and ways from an OSM file and an individual with a
+# number of buildings for each cycle, generate that individual as an OSM file
+def generate_ind(nodes,ways,cycles,ind,chrom_idx,output="data/ind.osm"):
     import copy
     _nodes = copy.deepcopy(nodes)
     _ways = copy.deepcopy(ways)
