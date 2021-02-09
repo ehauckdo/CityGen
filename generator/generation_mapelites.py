@@ -6,7 +6,7 @@ import lib.mapelites.Individual as Individual
 import lib.mapelites.evolution as evo
 import lib.helper as helper
 import lib.handler as handler
-import lib.plotter as plotter
+from lib.plotter import plot, plot_cycles_w_density
 import lib.trigonometry as trig
 import pprint
 from lib.parcel import generate_parcel_density
@@ -157,9 +157,9 @@ def parse_args(args):
     parser.add_option('-m', action="store", type="string", dest="model",
         help="Model trained on cities", default="classifier/Tsukuba.hdf5")
     parser.add_option('-d', action="store", type="int", dest="density",
-        help="Maximum initial density per cell for population", default=10)
+        help="Maximum initial density per cell for MAP-Elites population", default=10)
     parser.add_option('-a', action="store", type="float", dest="minarea",
-        help="Minimum area necessary for a building",default=(1500/5000000))
+        help="Minimum area necessary for a building",default=(1500/5000000))  # TODO: review (maybe remove this)
     parser.add_option('-o', action="store", type="string", dest="output_folder",
         help="Output folder", default="output")
     return parser.parse_args()
