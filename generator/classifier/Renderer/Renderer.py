@@ -298,7 +298,7 @@ def drawLine(originLon,originLat, destinationLon, destinationLat, color, name = 
         circle = canvas.create_oval(x-radius, y-radius, x+radius, y+radius, fill=color,tag = name)
     return circle
 
-def render(map,simulation = None, path = None):
+def render(map,simulation = None, path = None, script_run=False):
     global osmMap
     global canvasOrigin
     global canvasMax
@@ -328,6 +328,7 @@ def render(map,simulation = None, path = None):
     canvas.bind("<space>",doubleClick)
     canvas.bind("<MouseWheel>", scroll)
     #canvas.bind("<Configure>", resize)
+
     if OS == "Linux":
         root.bind_all('<4>', scroll, add='+')
         root.bind_all('<5>', scroll, add='+')
@@ -344,6 +345,8 @@ def render(map,simulation = None, path = None):
         drawAgent()
 
     canvas.after(1000,step)
+    if script_run:
+        root.mainloop()
 
 def start():
     root.mainloop()
