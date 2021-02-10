@@ -157,12 +157,17 @@ def parse_args(args):
 	   help="OSM input file", default="data/smaller_tsukuba.osm")
     parser.add_option('-m', action="store", type="string", dest="model",
         help="Model trained on cities", default="classifier/Tsukuba.hdf5")
-    parser.add_option('-d', action="store", type="int", dest="density",
-        help="Maximum initial density per cell for MAP-Elites population", default=10)
+    parser.add_option('-d', action="store", type="int", dest="max_per_cell",
+        help="Maximum initial candidates per cell for MAP-Elites population", default=10)
     parser.add_option('-o', action="store", type="string", dest="output_folder",
         help="Output folder", default="output")
     parser.add_option('-s', action="store", type="string", dest="similarity_metric",
         help="Similarity metric to be used (\"order\" or \"range\")", default="range")
+    parser.add_option('-b', action="store", type="int", dest="max_buildings",
+        help="Maximum buildings for the area", default=100)
+    parser.add_option('-g', action="store", type="int", dest="n_iterations",
+        help="Number of iterations for MAP-Elites", default=500)
+
     def parse_metric(metric):
         if metric == "range": return similarity_range
         if metric == "order": return similarity_order
@@ -242,10 +247,13 @@ def main():
     # Run evolution
     ##########################
     pop = evo.initialize_pop_ME(chrom, chrom_idx, neigh_idx, areas,
-                             max_buildings=maximum_buildings, pop_size=10)
+                            max_buildings=opt.max_buildings, pop_range=10,
+                            max_per_cell=opt.max_per_cell)
 
-    evo.generation_ME(pop, chrom_idx, neigh_idx, areas,metric=opt.similarity_metric,
-                     max_buildings=maximum_buildings, generations=200)
+    evo.generation_ME(pop, chrom_idx, neigh_idx, areas,
+                     metric=opt.similarity_metric,
+                     max_buildings=opt.max_buildings,
+                     generations=opt.n_iterations)
 
     ##########################
     # Parse individuals into osm files

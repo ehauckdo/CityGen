@@ -49,7 +49,7 @@ def mutate_ME(individual, chrom_idx, min_range=0, max_range=10, mut_rate=0.1):
             chrom[idx] = 0 if chrom[idx] < 0 else chrom[idx]
     individual.chromosome = chrom
 
-def initialize_pop_ME(chrom, chrom_idx, neigh_idx, areas, max_buildings, pop_size=10):
+def initialize_pop_ME(chrom, chrom_idx, neigh_idx, areas, max_buildings, pop_range=10, max_per_cell=10):
 
     # gives a very rough approximation of the highest error
     def highest_error(chrom, chrom_idx, neigh_idx, areas, max_buildings):
@@ -71,28 +71,33 @@ def initialize_pop_ME(chrom, chrom_idx, neigh_idx, areas, max_buildings, pop_siz
         b_index = bisect.bisect(bisect_range, value)-1
         return b_index
 
-    pop_range = 10
     population = [[[] for i in range(pop_range)] for j in range(pop_range)]
     print("Total buildings: {}".format(sum([g for g in chrom])))
     print("Total parcels: {}".format(len(chrom_idx)))
 
     misses = 0
     archive = []
-    # we will generate random candidates to fit each part of the range
-    # between min and max_buildings (e.g 0-20, 21-40, 41-60 etc)
-    for a in range(pop_size):
+    # we will try to generate random candidates to fit each part of the range
+    # between min and max_buildings (e.g 0-20, 21-40, 41-60 etc).
+    # we don't have a good way of generating between the density error (0-1) so
+    # we generate extra candidates (max_per_cell*n) to try and hit the max
+    for a in range(max_per_cell*10):
         r = np.linspace(0, max_buildings, pop_range+1)
 
         for it in range(len(r)-1):
             # create a new chrom clone
             new_chrom = [g for g in chrom]
 
+            # find min and max_buildings for this range (e.g. 0-20)
             min_limit, max_limit = r[it], r[it+1]
-            # find a vector size appropriate to distribute max_buiildings
+            # find randomly a maximum vector size to distribute max_buildings
             vector_limit = len(chrom_idx) if len(chrom_idx) < int(max_limit/2) else int(max_limit/2)
+            # initialize a vector with size no bigger than vector_limit
             size_vector = random.randint(1, vector_limit)
-            desired_buildings = random.randint(min_limit, max_limit)
 
+            # draw a random number of buildings between min and max_limit
+            # and distribute this number for each cell of the vector
+            desired_buildings = random.randint(min_limit, max_limit)
             vector = [random.random() for x in range(size_vector)]
             generated_sum = sum(vector)
             for i in range(len(vector)):
@@ -101,6 +106,7 @@ def initialize_pop_ME(chrom, chrom_idx, neigh_idx, areas, max_buildings, pop_siz
                 rounding = random.choice([math.ceil, int])
                 vector[i] = rounding((vector[i]/generated_sum)*desired_buildings)
 
+            # transfer the numbers from the vector into the new chrom
             rnd_idx = [i for i in range(len(chrom_idx))]
             random.shuffle(rnd_idx)
             for i in range(len(vector)):
@@ -112,16 +118,15 @@ def initialize_pop_ME(chrom, chrom_idx, neigh_idx, areas, max_buildings, pop_siz
             nbuildings = 0
             for idx in chrom_idx:
                 nbuildings += new_chrom[idx]
+            
             if nbuildings < min_limit or nbuildings > max_limit:
                 misses += 1
                 continue
             else:
                 archive.append(ind)
-                if len(archive) >= pop_size:
-                    break
-        if len(archive) >= pop_size:
-            break
 
+    # what is the maximum acceptable error? We get the maximum error from the
+    # initial generated candidates and set it as the max error threshold
     global highest_e
     highest_e = max([x.fitness for x in archive])
     print("highest_error: {}".format(highest_e))
@@ -133,21 +138,21 @@ def initialize_pop_ME(chrom, chrom_idx, neigh_idx, areas, max_buildings, pop_siz
         nbuildings = 0
         for idx in chrom_idx:
             nbuildings += ind.chromosome[idx]
-        #print("b{}, f{}, nf{}".format(summ, ind.fitness, normalize(ind.fitness)))
+
         ind.fitness = normalize(ind.fitness)
         d_idx = get_index(nbuildings, 0, max_buildings, pop_range)
         e_idx = get_index(ind.fitness, 0, 1, pop_range)
-        #print(d_idx, e_idx)
         if d_idx < 0 or d_idx >= pop_range: continue
         if e_idx < 0: continue
         if e_idx >= pop_range: continue
 
-        population[d_idx][e_idx].append(ind)
+        if len(population[d_idx][e_idx]) < max_per_cell:
+            population[d_idx][e_idx].append(ind)
 
     return population
 
 def generation_ME(population, chrom_idx, neigh_idx, areas, max_buildings,
-                    metric=similarity_range, generations=1000,pop_range=10):
+                    metric=similarity_range, generations=1000, pop_range=10):
 
     file1 = open("_log_mapelites","w")
     file1.write("gen,x,y,pop,min,max,avg,std\n")
