@@ -159,8 +159,6 @@ def parse_args(args):
         help="Model trained on cities", default="classifier/Tsukuba.hdf5")
     parser.add_option('-d', action="store", type="int", dest="density",
         help="Maximum initial density per cell for MAP-Elites population", default=10)
-    parser.add_option('-a', action="store", type="float", dest="minarea",
-        help="Minimum area necessary for a building",default=(1500/5000000))  # TODO: review (maybe remove this)
     parser.add_option('-o', action="store", type="string", dest="output_folder",
         help="Output folder", default="output")
     parser.add_option('-s', action="store", type="string", dest="similarity_metric",
@@ -228,8 +226,6 @@ def main():
     chrom_idx = [idx for idx in cycles if cycles[idx]["density"] == 0]
     neigh_idx = [cycles[idx]["neighbors"] for idx in cycles
                                             if cycles[idx]["density"] == 0]
-    # maximum building number based on area
-    maximum_buildings = sum(areas)/opt.minarea
     # maximum building number set manually
     maximum_buildings = 50
 
