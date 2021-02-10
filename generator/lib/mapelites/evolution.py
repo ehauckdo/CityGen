@@ -155,18 +155,7 @@ def generation_ME(population, chrom_idx, neigh_idx, areas, max_buildings,
                     metric=similarity_range, generations=1000, pop_range=10):
 
     file1 = open("_log_mapelites","w")
-    file1.write("gen,x,y,pop,min,max,avg,std\n")
 
-    def get_pop_data(p):
-        import numpy as np
-        fitnesses = [x.error for x in p]
-        mini = min(fitnesses)
-        chrom = p[fitnesses.index(mini)].chromosome
-        n_buildings = [chrom[idx] for idx in chrom_idx]
-        maxi = max(fitnesses)
-        avg = np.average(fitnesses)
-        std = np.std(fitnesses)
-        return sum(n_buildings), mini, maxi, avg, std
     def get_index(value, min, max, partitions=10):
         import bisect
         bisect_range = np.linspace(min, max, partitions+1)
@@ -220,9 +209,18 @@ def generation_ME(population, chrom_idx, neigh_idx, areas, max_buildings,
              #    population[i][j].append(child)
 
             population[d_idx][e_idx].append(child)
+    def log_pop(gen, population, logfile):
+        def get_pop_data(p):
+             import numpy as np
+             fitnesses = [x.error for x in p]
+             mini = min(fitnesses)
+             chrom = p[fitnesses.index(mini)].chromosome
+             n_buildings = [chrom[idx] for idx in chrom_idx]
+             maxi = max(fitnesses)
+             avg = np.average(fitnesses)
+             std = np.std(fitnesses)
+             return sum(n_buildings), mini, maxi, avg, std
 
-    for gen in range(generations):
-        # log some data from pop every few generations
         if gen % 50 == 0:
             log("Generation: {}".format(gen))
             for i in range(len(population)):
@@ -233,11 +231,14 @@ def generation_ME(population, chrom_idx, neigh_idx, areas, max_buildings,
                         n_bui, mini, maxi, avg, std = 0,0,0,0,0
                     else:
                         n_bui, mini, maxi, avg, std = get_pop_data(pop)
-                    file1.write("{},{},{},{},{:.2f},{:.2f},{:.2f},{:.2f}".format(gen,i,j,len(pop),mini,maxi,avg,std))
+                    logfile.write("{},{},{},{},{:.2f},{:.2f},{:.2f},{:.2f}".format(gen,i,j,len(pop),mini,maxi,avg,std))
                     log("Population [{}][{}], Cap: {}, n_bui:{}, best:{:.2f}, worst:{:.2f}, "  \
                             "avg:{:.2f}, std:{:.2f}".format(i,j, len(pop), n_bui, mini, maxi, avg, std))
-                    file1.write("\n")
+                    logfile.write("\n")
 
+    for gen in range(generations):
+        # log some data from pop every few generations
+        log_pop(gen, population, file1)
         steadystate(population, chrom_idx, max_buildings, neigh_idx, areas, pop_range)
         downsize_diversity(population, 0.35)
 
