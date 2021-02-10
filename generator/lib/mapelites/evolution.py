@@ -211,15 +211,19 @@ def generation_ME(population, chrom_idx, neigh_idx, areas, max_buildings,
             if d_idx < 0 or d_idx >= pop_range: continue
             if e_idx < 0 or e_idx >= pop_range: continue
 
-            if d_idx != i or e_idx != j:
-                population[d_idx][e_idx].append(child)
-            elif child.error < ind.error:
-                population[i][j].remove(ind)
-                population[i][j].append(child)
+             # #no need to compare child against parent as downsize function
+             # #already compares everyone against everyone for each cell
+             # if d_idx != i or e_idx != j:
+             #     population[d_idx][e_idx].append(child)
+             # elif child.error < ind.error:
+             #    population[i][j].remove(ind)
+             #    population[i][j].append(child)
+
+            population[d_idx][e_idx].append(child)
 
     for gen in range(generations):
         # log some data from pop every few generations
-        if gen % 100 == 0:
+        if gen % 50 == 0:
             log("Generation: {}".format(gen))
             for i in range(len(population)):
                 for j in range(len(population[i])):
