@@ -61,10 +61,10 @@ def initialize_pop_ME(chrom, chrom_idx, neigh_idx, areas, max_buildings, pop_ran
             genes = [int(random.random()*max_parcel) for x in range(len(chrom))]
             for c_idx in chrom_idx: new_chrom[c_idx] = genes[c_idx]
             individual = Individual.Individual(new_chrom)
-            individual.fitness = density_error(new_chrom, chrom_idx, neigh_idx, areas)
+            individual.error = density_error(new_chrom, chrom_idx, neigh_idx, areas)
             archive.append(individual)
-        highest_e = max([x.fitness for x in archive])
-        return max([x.fitness for x in archive])
+        highest_e = max([x.error for x in archive])
+        return max([x.error for x in archive])
     def get_index(value, min, max, partitions=10):
         import bisect
         bisect_range = np.linspace(min, max, partitions+1)
@@ -114,11 +114,11 @@ def initialize_pop_ME(chrom, chrom_idx, neigh_idx, areas, max_buildings, pop_ran
                 new_chrom[chrom_idx[idx]] = vector[i]
 
             ind = Individual.Individual(new_chrom)
-            ind.fitness = density_error(new_chrom, chrom_idx, neigh_idx, areas)
+            ind.error = density_error(new_chrom, chrom_idx, neigh_idx, areas)
             nbuildings = 0
             for idx in chrom_idx:
                 nbuildings += new_chrom[idx]
-            
+
             if nbuildings < min_limit or nbuildings > max_limit:
                 misses += 1
                 continue
@@ -128,7 +128,7 @@ def initialize_pop_ME(chrom, chrom_idx, neigh_idx, areas, max_buildings, pop_ran
     # what is the maximum acceptable error? We get the maximum error from the
     # initial generated candidates and set it as the max error threshold
     global highest_e
-    highest_e = max([x.fitness for x in archive])
+    highest_e = max([x.error for x in archive])
     print("highest_error: {}".format(highest_e))
 
     # after an initial archive of individuals was generated, distribute
@@ -139,9 +139,9 @@ def initialize_pop_ME(chrom, chrom_idx, neigh_idx, areas, max_buildings, pop_ran
         for idx in chrom_idx:
             nbuildings += ind.chromosome[idx]
 
-        ind.fitness = normalize(ind.fitness)
+        ind.error = normalize(ind.error)
         d_idx = get_index(nbuildings, 0, max_buildings, pop_range)
-        e_idx = get_index(ind.fitness, 0, 1, pop_range)
+        e_idx = get_index(ind.error, 0, 1, pop_range)
         if d_idx < 0 or d_idx >= pop_range: continue
         if e_idx < 0: continue
         if e_idx >= pop_range: continue
@@ -159,7 +159,7 @@ def generation_ME(population, chrom_idx, neigh_idx, areas, max_buildings,
 
     def get_pop_data(p):
         import numpy as np
-        fitnesses = [x.fitness for x in p]
+        fitnesses = [x.error for x in p]
         mini = min(fitnesses)
         chrom = p[fitnesses.index(mini)].chromosome
         n_buildings = [chrom[idx] for idx in chrom_idx]
@@ -180,7 +180,7 @@ def generation_ME(population, chrom_idx, neigh_idx, areas, max_buildings,
                     for l in range(k-1, -1, -1):
                         sim = similarity_range(pop[k].chromosome, pop[l].chromosome, chrom_idx)
                         if sim > similarity_limit:
-                            if pop[k].fitness < pop[l].fitness:
+                            if pop[k].error < pop[l].error:
                                 _temp = pop[k]
                                 pop[k] = pop[l]
                                 pop[l] = _temp
@@ -198,22 +198,22 @@ def generation_ME(population, chrom_idx, neigh_idx, areas, max_buildings,
             # the intensity of mutation is proportioinal to the current total no of buildings
             max_mut = math.ceil(max_buildings/len(chrom_idx))*(i+2)
             mutate_ME(child, chrom_idx, 0, max_mut, 0.1)
-            child.fitness = density_error(child.chromosome, chrom_idx, neigh_idx, areas)
-            child.fitness = normalize(child.fitness)
+            child.error = density_error(child.chromosome, chrom_idx, neigh_idx, areas)
+            child.error = normalize(child.error)
             nbuildings = 0
             for idx in chrom_idx:
                 nbuildings += child.chromosome[idx]
 
             # get new indexes in the grid and place in the appropriate cell
             d_idx = get_index(nbuildings, 0, max_buildings, pop_range)
-            e_idx = get_index(child.fitness, 0, 1, pop_range)
+            e_idx = get_index(child.error, 0, 1, pop_range)
 
             if d_idx < 0 or d_idx >= pop_range: continue
             if e_idx < 0 or e_idx >= pop_range: continue
 
             if d_idx != i or e_idx != j:
                 population[d_idx][e_idx].append(child)
-            elif child.fitness < ind.fitness:
+            elif child.error < ind.error:
                 population[i][j].remove(ind)
                 population[i][j].append(child)
 
@@ -245,6 +245,6 @@ def top_individuals_ME(population, n_ind=1, pop_range=10):
         for j in range(len(population)):
             pop = population[i][j]
             if len(pop) == 0: continue
-            best_ind = sorted(pop, key=lambda i: i.fitness)[:n_ind]
+            best_ind = sorted(pop, key=lambda i: i.error)[:n_ind]
             top_individuals[i][j].extend(best_ind)
     return top_individuals
