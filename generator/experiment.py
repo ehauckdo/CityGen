@@ -8,6 +8,7 @@ from lib.parcel import generate_parcel_density
 from lib.plotter import plot, plot_cycles_w_density
 from classifier.model import load_model, accuracy
 import copy
+from lib.mapelites.metrics import similarity_order, similarity_range
 
 # set up logging
 logging.basicConfig(level=logging.INFO, filemode='w', filename='_log_main')
@@ -22,7 +23,7 @@ def set_colors(nodes, ways):
     helper.set_node_type(ways, nodes)
     helper.color_nodes(nodes.values(), "black")
     helper.color_ways(ways, nodes, ways_colors, nodes_colors, default="black")
-def generate_ind(nodes,ways,cycles,ind,chrom_idx,neigh_idx,output="data/ind.osm"):
+def generate_ind(nodes,ways,cycles,ind,chrom_idx,output="data/ind.osm"):
     import copy
     _nodes = copy.deepcopy(nodes)
     _ways = copy.deepcopy(ways)
@@ -141,7 +142,15 @@ def parse_args(args):
         help="Minimum area necessary for a building",default=(1500/5000000))
     parser.add_option('-o', action="store", type="string", dest="output_folder",
         help="Output folder", default="output")
-    return parser.parse_args()
+    parser.add_option('-s', action="store", type="string", dest="similarity_metric",
+        help="Similarity metric to be used (\"order\" or \"range\")", default="range")
+    def parse_metric(metric):
+        if metric == "range": return similarity_range
+        if metric == "order": return similarity_order
+        raise ValueError("invalid similarity metric")
+    opt, args = parser.parse_args()
+    opt.similarity_metric = parse_metric(opt.similarity_metric)
+    return opt, args
 
 def main():
     os.system('clear')
@@ -285,7 +294,7 @@ def main():
     pop = evo.initialize_pop_ME(chrom, chrom_idx, neigh_idx, areas,
                              max_buildings=maximum_buildings, pop_size=10)
 
-    evo.generation_ME(pop, chrom_idx, neigh_idx, areas,
+    evo.generation_ME(pop, chrom_idx, neigh_idx, areas, metric=similarity_range,
                      max_buildings=maximum_buildings, generations=50)
 
     ##########################
@@ -309,7 +318,7 @@ def main():
                 ind_file = output_file.format(output, i,j)
                 log("Saving generated output to {}...".format(ind_file))
                 _n, _w = generate_ind(nodes,ways,cycles,top_ind,
-                                       chrom_idx,neigh_idx,ind_file)
+                                       chrom_idx,ind_file)
                 acc = accuracy(ind_file, model)
                 log("Accuracy: {:.5f}".format(acc))
 

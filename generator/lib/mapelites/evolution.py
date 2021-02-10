@@ -146,7 +146,8 @@ def initialize_pop_ME(chrom, chrom_idx, neigh_idx, areas, max_buildings, pop_siz
 
     return population
 
-def generation_ME(population, chrom_idx, neigh_idx, areas, max_buildings, generations=1000,pop_range=10):
+def generation_ME(population, chrom_idx, neigh_idx, areas, max_buildings,
+                    metric=similarity_range, generations=1000,pop_range=10):
 
     file1 = open("_log_mapelites","w")
     file1.write("gen,x,y,pop,min,max,avg,std\n")
