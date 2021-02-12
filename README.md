@@ -31,6 +31,9 @@ After creating the environment and activating it, navigate to ```/generator``` a
 ```
 .
 └── CityGen
+    ├── experiment_notebook           
+    │   ├── building_placements.ipynb # notebook plotting the figures from experiment
+    │   └── data
     ├── generator                     # main repository folder
     │   ├── classifier
     │   │   ├── model.py
