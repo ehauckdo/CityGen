@@ -4,6 +4,7 @@ This repository contains the code for the manuscript Building Placements Generat
 
 Contents:
 
+Jupyter notebook from experiment: ```/experiment_notebook```  
 Main code: ```/generator```  
 Manuscript: ```/manuscript```  
 
@@ -26,6 +27,15 @@ Manuscript: ```/manuscript```
 After creating the environment and activating it, navigate to ```/generator``` and run:
 
 ```python3 experiment.py```
+
+Logs with results (_log_mapelites, log_accuracies) will be saved under /generator.  
+You can generate figures from these logs by using the jupyter notebook in ```/experiment_notebook```
+
+## How to render a OSM (input or output) file?
+
+After creating the environment and activating it, navigate to ```/generator``` and run:
+
+```python3 render.py -i [folder_w_file]/[file.osm]```
 
 ## Folder structure
 ```
@@ -59,7 +69,8 @@ After creating the environment and activating it, navigate to ```/generator``` a
     │   │   ├── settings.py
     │   │   └── trigonometry.py
     │   ├── experiment.py             # experiment standalone script
-    │   └── generation_mapelites.py   # main system script
+    │   ├── generation_mapelites.py   # main system script
+    │   └── render.py                 # render maps from osm files
     ├── manuscript              
     │   └── manuscript.pdf            # manuscript describing the system
     ├── LICENSE
